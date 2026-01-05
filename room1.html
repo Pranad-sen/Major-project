@@ -31,12 +31,14 @@ header h1 { font-size: 20px; }
 /* ========== LEFT PANEL ========== */
 #left-panel {
   width: 220px;
-  background: #ccefff;
+  background: linear-gradient(135deg, #f3efe9 0%, #d6c8b8 50%, #b89f86 100%);
   padding: 12px;
 }
 #left-panel h3 { margin-bottom: 10px; font-size: 14px; }
 .f-item {
-  background: #8dd2ff;
+  background: linear-gradient(to left, #faf7f3, #d39a58);
+  border: 2px solid #b8753a;
+  text-align: center;
   padding: 8px;
   border-radius: 8px;
   margin-bottom: 6px;
@@ -142,9 +144,9 @@ header h1 { font-size: 20px; }
   <aside id="left-panel">
     <button id="draw-wall-btn" style="margin-bottom: 10px;">Draw Wall</button>
     <h3>Furniture</h3>
-    <div class="f-item" draggable="true" data-name="Chair" data-w="40" data-h="40">Chair</div>
-    <div class="f-item" draggable="true" data-name="Table" data-w="60" data-h="60">Table</div>
-    <div class="f-item" draggable="true" data-name="Bed" data-w="120" data-h="60">Bed</div>
+    <div class="f-item" draggable="true" data-name="Chair" data-w="1.5" data-h="1.5">Chair</div>
+    <div class="f-item" draggable="true" data-name="Table" data-w="3" data-h="3">Table</div>
+    <div class="f-item" draggable="true" data-name="Bed" data-w="6" data-h="3">Bed</div>
   </aside>
 
   <main id="main">
@@ -153,9 +155,9 @@ header h1 { font-size: 20px; }
       <div id="furniture-layer"></div>
 
      <div id="resize-panel">
-  <strong>Furniture Size (px)</strong><br>
-  Width (px): <input id="rw" type="number" step="1"><br>
-  Height (px): <input id="rh" type="number" step="1">
+  <strong>Furniture Size (ft)</strong><br>
+  Width (ft): <input id="rw" type="number" step="0.1"><br>
+  Height (ft): <input id="rh" type="number" step="0.1">
 </div>
 
     </div>
@@ -166,7 +168,16 @@ header h1 { font-size: 20px; }
 
 <script>
 /* ================= CONFIG ================= */
-const PIXELS_PER_FOOT = 20;
+const PIXELS_PER_FOOT = 50;
+
+function ftToPx(ft) {
+  return ft * PIXELS_PER_FOOT;
+}
+
+function pxToFt(px) {
+  return px / PIXELS_PER_FOOT;
+}
+
 let wallDrawMode = false;
 let wallStartPoint = null;
 
@@ -292,6 +303,16 @@ function pointInPolygon(p, poly) {
   }
   return inside;
 }
+function rectInsidePolygon(x, y, w, h, poly) {
+  const corners = [
+    { x: x,     y: y },
+    { x: x + w, y: y },
+    { x: x + w, y: y + h },
+    { x: x,     y: y + h }
+  ];
+  return corners.every(pt => pointInPolygon(pt, poly));
+}
+
 
 function overlap(id,x,y,w,h){
   for(const k in furniture){
@@ -299,19 +320,30 @@ function overlap(id,x,y,w,h){
     const o=furniture[k];
     const ox=parseFloat(o.el.style.left);
     const oy=parseFloat(o.el.style.top);
-    if(x<ox+o.w && x+w>ox && y<oy+o.h && y+h>oy) return true;
+    const ow = ftToPx(o.wFt);
+    const oh = ftToPx(o.hFt);
+
+    if (x < ox + ow && x + w > ox && y < oy + oh && y + h > oy)
+
+      return true;
   }
   return false;
 }
 
-function createFurniture(name,w,h,x,y){
+function createFurniture(name,wFt,hFt,x,y){
   const id="f"+nextId++;
   const el=document.createElement("div");
   el.className="furniture";
-  el.style.width=w+"px";
-  el.style.height=h+"px";
-  el.style.left=x-w/2+"px";
-  el.style.top=y-h/2+"px";
+  const wPx = ftToPx(wFt);
+  const hPx = ftToPx(hFt);
+
+  el.style.width = wPx + "px";
+  el.style.height = hPx + "px";
+  el.style.left = x - wPx / 2 + "px";
+  el.style.top = y - hPx / 2 + "px";
+
+  furniture[id] = { el, wFt, hFt };
+
   el.innerHTML=`<b>${name}</b>`;
 
   const ctr=document.createElement("div");
@@ -336,8 +368,8 @@ function createFurniture(name,w,h,x,y){
     document.querySelectorAll(".furniture").forEach(f=>f.classList.remove("selected"));
     el.classList.add("selected");
 
-    rw.value=furniture[id].w;
-    rh.value=furniture[id].h;
+    rw.value=furniture[id].wFt;
+    rh.value=furniture[id].hFt;
     resizePanel.style.display="block";
 
     const r=el.getBoundingClientRect();
@@ -346,7 +378,7 @@ function createFurniture(name,w,h,x,y){
   };
 
   furnitureLayer.appendChild(el);
-  furniture[id]={el,w,h};
+  furniture[id]={el,wFt,hFt};
 }
 
 document.addEventListener("mousemove",e=>{
@@ -355,9 +387,15 @@ document.addEventListener("mousemove",e=>{
   const r=canvas.getBoundingClientRect();
   const nx=e.clientX-r.left-offset.x;
   const ny=e.clientY-r.top-offset.y;
-  const c={x:nx+it.w/2,y:ny+it.h/2};
+  const wPx = ftToPx(it.wFt);
+  const hPx = ftToPx(it.hFt);
 
-  if(pointInPolygon(c,vertices) && !overlap(draggingFurniture,nx,ny,it.w,it.h)){
+
+ if(
+  rectInsidePolygon(nx, ny, wPx, hPx, vertices) &&
+  !overlap(draggingFurniture, nx, ny, wPx, hPx)
+){
+
     it.el.style.left=nx+"px";
     it.el.style.top=ny+"px";
   }
@@ -367,18 +405,25 @@ document.addEventListener("mouseup",()=>draggingFurniture=null);
 rw.onchange=rh.onchange=()=>{
   if(!selected) return;
   const it=furniture[selected];
-  const w = Math.round(Number(rw.value));
-const h = Math.round(Number(rh.value));
+  const wFt = Math.round(Number(rw.value));
+  const hFt = Math.round(Number(rh.value));
   const x=parseFloat(it.el.style.left), y=parseFloat(it.el.style.top);
-  const c={x:x+w/2,y:y+h/2};
+  const wPx = ftToPx(wFt);
+  const hPx = ftToPx(hFt);
+  const c={x:x+wPx/2,y:y+hPx/2};
 
-  if(pointInPolygon(c,vertices) && !overlap(selected,x,y,w,h)){
-    it.w=w; it.h=h;
-    it.el.style.width=w+"px";
-    it.el.style.height=h+"px";
+  if(
+  rectInsidePolygon(x, y, wPx, hPx, vertices) &&
+  !overlap(selected, x, y, wPx, hPx)
+){
+
+    it.wFt=wFt; 
+    it.hFt=hFt;
+    it.el.style.width=wPx+"px";
+    it.el.style.height=hPx+"px";
   } else {
-    rw.value=it.w;
-    rh.value=it.h;
+    rw.value=it.wFt;
+    rh.value=it.hFt;
   }
 };
 
@@ -400,7 +445,6 @@ function updateSizeInfo(w, h) {
   const hf = (h / PIXELS_PER_FOOT).toFixed(2);
   sizeInfo.textContent = `${wf} ft × ${hf} ft`;
 }
-updateSizeInfo(it.w, it.h);
 
 </script>
 
