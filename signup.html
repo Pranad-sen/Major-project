@@ -124,12 +124,9 @@
         </div>
     </div>
     <script type="module">
-        // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-        // TODO: Add SDKs for Firebase products that you want to use
-        // https://firebase.google.com/docs/web/setup#available-libraries
-
-        // Your web app's Firebase configuration
+        import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+        import { getFirestore, setDoc, doc } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
         const firebaseConfig = {
             apiKey: "AIzaSyBJCBoVlZNxFma6ZpBZrTE6MH224jAIyk4",
             authDomain: "virtual-room-organiser.firebaseapp.com",
@@ -139,8 +136,41 @@
             appId: "1:831325947967:web:94147021fd4e51efe1108a"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const form = document.getElementById("signupForm");
+
+        form.addEventListener("submit", async (e) => {
+
+            e.preventDefault();
+
+            const fullname = document.getElementById("fullname").value;
+            const email = document.getElementById("email").value;
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+
+            try {
+
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+                await setDoc(doc(db,"users",userCredential.user.uid),{
+                    fullname: fullname,
+                    email: email,
+                    username: username
+                });
+
+                alert("Account created successfully");
+                window.location.href="login.html";
+            } catch(error){
+
+                alert(error.message);
+
+            }
+
+        });
+
     </script>
 
 </body>

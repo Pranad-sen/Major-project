@@ -109,12 +109,10 @@
         </div>
     </div>
     <script type="module">
-        // Import the functions you need from the SDKs you need
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-        // TODO: Add SDKs for Firebase products that you want to use
-        // https://firebase.google.com/docs/web/setup#available-libraries
 
-        // Your web app's Firebase configuration
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+
         const firebaseConfig = {
             apiKey: "AIzaSyBJCBoVlZNxFma6ZpBZrTE6MH224jAIyk4",
             authDomain: "virtual-room-organiser.firebaseapp.com",
@@ -124,8 +122,34 @@
             appId: "1:831325947967:web:94147021fd4e51efe1108a"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const form = document.getElementById("loginForm");
+
+        form.addEventListener("submit", async (e)=>{
+
+            e.preventDefault();
+
+            const email = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+
+            try{
+
+                await signInWithEmailAndPassword(auth,email,password);
+
+                alert("Login successful");
+
+                window.location.href="index.html";
+
+            }catch(error){
+
+                alert("Invalid login credentials");
+
+            }
+
+        });
+
     </script>
 
 </body>
