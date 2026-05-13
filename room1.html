@@ -132,8 +132,8 @@ header h1 {
 }
 .furniture {
   position: absolute;
-  background: #ffd27d;
-  border: 2px solid #f59600;
+  background: transparent;
+  border: 2px solid transparent;
   border-radius: 8px;
   padding: 4px;
   cursor: move;
@@ -142,6 +142,7 @@ header h1 {
 
 .furniture.selected {
   border-color: #0070ff;
+  box-shadow: 0 0 8px rgba(0,112,255,0.5);
 }
 
 .furniture img {
@@ -204,6 +205,13 @@ header h1 {
 
     <button id="draw-wall-btn" style="margin-bottom: 10px;">
       Draw Wall
+    </button>
+    <button id="move-furniture-btn" style="margin-bottom: 10px;">
+      Move Furniture
+    </button>
+
+    <button id="done-move-btn" style="margin-bottom: 10px; display:none;">
+      ✓ Done
     </button>
 
     <h3>Furniture</h3>
@@ -522,6 +530,7 @@ let nextId = 1;
 let draggingFurniture = null;
 let offset = {};
 let selected = null;
+let moveMode = false;
 
 function pointInPolygon(p, poly) {
 
@@ -627,11 +636,12 @@ function createFurniture(name,img,wFt,hFt,x,y){
 
   el.onmousedown = e => {
 
+    if(!moveMode) return;
+
     e.stopPropagation();
 
     draggingFurniture = id;
     selected = id;
-
     document.querySelectorAll(".furniture")
       .forEach(f => f.classList.remove("selected"));
 
@@ -746,6 +756,33 @@ window.addEventListener("load", initRoom);
 window.addEventListener("resize", initRoom);
 
 const sizeInfo = document.getElementById("size-info");
+
+const moveBtn = document.getElementById("move-furniture-btn");
+const doneBtn = document.getElementById("done-move-btn");
+
+moveBtn.onclick = () => {
+  moveMode = true;
+  moveBtn.style.display = "none";
+  doneBtn.style.display = "block";
+
+  document.querySelectorAll(".furniture")
+    .forEach(f => f.style.cursor = "move");
+  };
+
+  doneBtn.onclick = () => {
+    moveMode = false;
+    moveBtn.style.display = "block";
+    doneBtn.style.display = "none";
+
+    draggingFurniture = null;
+
+    document.querySelectorAll(".furniture").forEach(f => {
+      f.classList.remove("selected");
+      f.style.cursor = "default";
+    });
+
+    resizePanel.style.display = "none";
+  };
 
 function updateSizeInfo(w,h){
 
