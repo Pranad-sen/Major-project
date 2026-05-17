@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Roomify – 2D Room Planner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<style>
+/* ========== GLOBAL ========== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Segoe UI, system-ui;
+}
+
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #eef6fb;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ========== TOPBAR ========== */
+
+#topbar {
+  height: 64px;
+  background: #ffffff;
+  border-bottom: 1px solid #dcdcdc;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 18px;
+
+  z-index: 100;
+}
+
+/* LEFT + RIGHT */
+#topbar-left,
+#topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* LOGO */
+#logo {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f1f1f;
+
+  margin-right: 10px;
+}
+
+/* BUTTONS */
+.top-btn,
+.top-icon-btn {
+
+  height: 40px;
+
+  padding: 0 16px;
+
+  border-radius: 12px;
+
+  background: #f4f4f4;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  transition: .2s;
+}
+
+.top-btn:hover,
+.top-icon-btn:hover {
+  background: #e8e8e8;
+}
+
+/* PROFILE */
+#profile-btn {
+  position: relative;
+  cursor: pointer;
+}
+
+#profile-avatar {
+
+  width: 40px;
+  height: 40px;
+
+  border-radius: 50%;
+
+  background: #1a73e8;
+  color: white;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-weight: bold;
+}
+
+/* HOVER MENU */
+#profile-hover-menu {
+
+  position: absolute;
+
+  top: 44px;
+  right: 0;
+
+  width: 180px;
+
+  background: white;
+
+  border-radius: 12px;
+
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+
+  display: none;
+
+  overflow: hidden;
+  padding-top: 12px;
+}
+
+#profile-btn:hover #profile-hover-menu {
+  display: block;
+}
+
+.profile-item {
+
+  padding: 14px 16px;
+
+  cursor: pointer;
+
+  transition: .2s;
+}
+
+.profile-item:hover {
+  background: #f4f4f4;
+}
+
+/* ========== APP LAYOUT ========== */
+#app {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ========== SIDEBAR ========== */
+
+#sidebar {
+
+  width: 80px;
+
+  background: white;
+
+  border-right: 1px solid #e2e2e2;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  padding-top: 18px;
+
+  gap: 18px;
+}
+
+/* SIDEBAR ITEMS */
+
+.sidebar-item {
+
+  width: 64px;
+
+  border-radius: 16px;
+
+  padding: 12px 6px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+
+  cursor: pointer;
+
+  transition: .2s;
+
+  color: #444;
+
+  font-size: 13px;
+}
+
+.sidebar-item:hover {
+  background: #f2f2f2;
+}
+
+.sidebar-item.active {
+  background: #e8f0ff;
+  color: #1a73e8;
+}
+
+/* TOOL PANEL */
+
+#tool-panel {
+
+  width: 260px;
+
+  background: #fafafa;
+
+  border-right: 1px solid #e2e2e2;
+
+  padding: 16px;
+
+  overflow-y: auto;
+
+  transform: translateX(0);
+
+  transition: .3s;
+}
+
+/* TOOL BUTTONS */
+
+#tool-panel button {
+
+  width: 100%;
+
+  height: 42px;
+
+  border: none;
+
+  border-radius: 12px;
+
+  background: #1a73e8;
+
+  color: white;
+
+  margin-bottom: 12px;
+
+  cursor: pointer;
+
+  font-size: 14px;
+
+  transition: .2s;
+}
+
+#tool-panel button:hover {
+  background: #155cc4;
+}
+
+/* FURNITURE ITEMS */
+
+.f-item {
+
+  background: white;
+
+  border: 1px solid #e2e2e2;
+
+  text-align: center;
+
+  padding: 10px;
+
+  border-radius: 16px;
+
+  margin-bottom: 12px;
+
+  cursor: grab;
+
+  transition: .2s;
+}
+
+.f-item:hover {
+  transform: translateY(-2px);
+
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+}
+
+.f-item img {
+
+  width: 100%;
+
+  height: 80px;
+
+  object-fit: contain;
+
+  pointer-events: none;
+}
+
+.panel-section {
+  display: none;
+}
+
+.panel-section.active {
+  display: block;
+}
+
+/* ========== MAIN AREA ========== */
+#main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ========== CANVAS ========== */
+#canvas {
+  width: 85%;
+  height: 85%;
+  background:
+    linear-gradient(to right, rgba(0,0,0,.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ========== SVG ROOM ========== */
+#svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: all;
+}
+
+.wall {
+  stroke: #555;
+  stroke-width: 4;
+  cursor: pointer;
+}
+
+.point {
+  fill: #fff;
+  stroke: #333;
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.wall-label {
+  fill: #000;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* ========== FURNITURE ========== */
+#furniture-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.furniture {
+  position: absolute;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 4px;
+  cursor: move;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.furniture.selected {
+  border-color: #0070ff;
+  box-shadow: 0 0 8px rgba(0,112,255,0.5);
+}
+
+.furniture img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.f-controls {
+  position: absolute;
+  top: -18px;
+  right: -18px;
+  opacity: 0;
+}
+
+.furniture:hover .f-controls {
+  opacity: 1;
+}
+
+.f-controls button {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: #0070ff;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* ========== RESIZE PANEL ========== */
+#resize-panel {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: #fff;
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  display: none;
+  z-index: 10;
+}
+
+#resize-panel input {
+  width: 70px;
+  margin-top: 4px;
+}
+</style>
+</head>
+
+<body>
+
+<header id="topbar">
+
+  <!-- LEFT SECTION -->
+  <div id="topbar-left">
+
+    <div id="logo">
+      Roomify
+    </div>
+
+    <div class="top-btn" id="floor-selector">
+      Ground Floor ▼
+    </div>
+
+    <div class="top-icon-btn" id="add-floor-btn">
+      ＋ Floor
+    </div>
+
+    <div class="top-icon-btn" id="undo-btn">
+      ↶
+    </div>
+
+    <div class="top-icon-btn" id="redo-btn">
+      ↷
+    </div>
+
+  </div>
+
+  <!-- RIGHT SECTION -->
+  <div id="topbar-right">
+
+    <div class="top-icon-btn">
+      🖨 Print
+    </div>
+
+    <div class="top-icon-btn">
+      🔗 Share
+    </div>
+
+    <div id="profile-btn">
+      <div id="profile-avatar">
+        U
+      </div>
+
+      <div id="profile-hover-menu">
+
+        <div class="profile-item">
+          My Projects
+        </div>
+
+        <div class="profile-item">
+          Settings
+        </div>
+
+        <div class="profile-item">
+          Logout
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</header>
+
+<div id="app">
+
+    <aside id="sidebar">
+
+        <div class="sidebar-item active" id="search-tab">
+            🔍
+            <span>Search</span>
+        </div>
+
+        <div class="sidebar-item" id="build-tab">
+            🏗
+            <span>Build</span>
+        </div>
+
+        <div class="sidebar-item" id="furnish-tab">
+            🛋
+            <span>Furnish</span>
+        </div>
+
+        <div class="sidebar-item" id="outdoor-tab">
+            🌳
+            <span>Outdoor</span>
+        </div>
+
+        <div class="sidebar-item" id="edit-tab">
+            ✏️
+            <span>Edit</span>
+        </div>
+    </aside>
+
+    <!-- TEMP CONTENT PANEL -->
+
+    <div id="tool-panel">
+
+        <!-- EDIT PANEL -->
+        <div class="panel-section" id="edit-panel">
+
+            <button id="draw-wall-btn">
+                Draw Wall
+            </button>
+
+            <button id="move-furniture-btn">
+                Move Furniture
+            </button>
+
+            <button id="done-move-btn" style="display:none;">
+                ✓ Done
+            </button>
+        </div>
+
+        <!-- FURNISH PANEL -->
+        <div class="panel-section" id="furnish-panel">
+
+            <h3>Furniture</h3>
+
+            <div class="f-item"
+                draggable="true"
+                data-name="Chair"
+                data-img="images/furniture/chair.png"
+                data-w="1.5"
+                data-h="1.5">
+
+                <img src="images/furniture/chair.png">
+            </div>
+
+            <div class="f-item"
+                draggable="true"
+                data-name="table"
+                data-img="images/furniture/table.png"
+                data-w="3"
+                data-h="3">
+
+                <img src="images/furniture/table.png">
+            </div>
+
+            <div class="f-item"
+                draggable="true"
+                data-name="Bed"
+                data-img="images/furniture/bed.png"
+                data-w="6"
+                data-h="3">
+
+                <img src="images/furniture/bed.png">
+            </div>
+
+        </div>
+
+    </div>
+
+    <main id="main">
+
+        <div id="canvas">
+
+            <svg id="svg"></svg>
+
+            <div id="furniture-layer"></div>
+
+            <div id="resize-panel">
+
+                <strong>Furniture Size (ft)</strong><br>
+
+                Width (ft):
+                <input id="rw" type="number" step="0.1"><br>
+
+                Height (ft):
+                <input id="rh" type="number" step="0.1">
+
+            </div>
+
+        </div>
+
+    </main>
+
+    </div>
+
+<div id="size-info"></div>
+
+<script>
+
+/* ================= CONFIG ================= */
+
+const PIXELS_PER_FOOT = 50;
+
+function ftToPx(ft) {
+  return ft * PIXELS_PER_FOOT;
+}
+
+function pxToFt(px) {
+  return px / PIXELS_PER_FOOT;
+}
+
+let wallDrawMode = false;
+let wallStartPoint = null;
+
+/* ================= WALL DRAWING ================= */
+
+document.getElementById("draw-wall-btn").onclick = () => {
+
+  wallDrawMode = true;
+
+  canvas.style.cursor = "crosshair";
+};
+
+/* ================= ROOM ================= */
+const svg = document.getElementById("svg");
+const canvas = document.getElementById("canvas");
+
+let vertices = [];
+let draggingPoint = null;
+
+function getClosestSegment(x, y) {
+
+  let minDist = Infinity;
+  let insertIndex = -1;
+
+  for (let i = 0; i < vertices.length; i++) {
+
+    const a = vertices[i];
+    const b = vertices[(i + 1) % vertices.length];
+
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+
+    const dist = Math.hypot(x - mx, y - my);
+
+    if (dist < minDist) {
+      minDist = dist;
+      insertIndex = i + 1;
+    }
+  }
+
+  return insertIndex;
+}
+
+function initRoom() {
+
+  const r = canvas.getBoundingClientRect();
+
+  if (r.width === 0 || r.height === 0) return;
+
+  const w = Math.min(400, r.width * 0.6);
+  const h = Math.min(300, r.height * 0.6);
+  const cx = r.width / 2;
+  const cy = r.height / 2;
+
+  vertices = [
+    {x: cx-w/2, y: cy-h/2},
+    {x: cx+w/2, y: cy-h/2},
+    {x: cx+w/2, y: cy+h/2},
+    {x: cx-w/2, y: cy+h/2}
+  ];
+  drawRoom();
+}
+
+function drawRoom() {
+
+  svg.innerHTML = "";
+
+/* ===== CREATE ONE ROOM PATH ===== */
+
+const path = document.createElementNS(
+  "http://www.w3.org/2000/svg",
+  "path"
+);
+
+let d = `M ${vertices[0].x} ${vertices[0].y}`;
+
+for (let j = 1; j < vertices.length; j++) {
+  d += ` L ${vertices[j].x} ${vertices[j].y}`;
+}
+
+/* CLOSE ROOM */
+d += " Z";
+
+path.setAttribute("d", d);
+path.setAttribute("fill", "none");
+path.setAttribute("stroke", "#555");
+path.setAttribute("stroke-width", "4");
+path.setAttribute("class", "wall");
+
+svg.appendChild(path);
+
+/* ===== WALL LABELS ===== */
+
+for (let i = 0; i < vertices.length; i++) {
+
+  const a = vertices[i];
+  const b = vertices[(i + 1) % vertices.length];
+
+  const len =
+    Math.hypot(b.x-a.x, b.y-a.y) / PIXELS_PER_FOOT;
+
+  const t = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "text"
+  );
+
+  t.setAttribute("x", (a.x+b.x)/2);
+  t.setAttribute("y", (a.y+b.y)/2 - 6);
+  t.setAttribute("class", "wall-label");
+
+  t.textContent = len.toFixed(1) + " ft";
+
+  svg.appendChild(t);
+}
+
+  vertices.forEach((p,i)=>{
+
+    const c = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "circle"
+    );
+
+    c.setAttribute("cx", p.x);
+    c.setAttribute("cy", p.y);
+    c.setAttribute("r", 6);
+    c.setAttribute("class", "point");
+
+    c.onmousedown = () => draggingPoint = i;
+
+    c.oncontextmenu = e => {
+
+      e.preventDefault();
+
+      if (vertices.length > 3) {
+        vertices.splice(i,1);
+        drawRoom();
+      }
+    };
+    svg.appendChild(c);
+  });
+}
+
+document.addEventListener("mousemove", e => {
+
+  if (draggingPoint === null) return;
+
+  const r = canvas.getBoundingClientRect();
+
+  const grid = 20;
+
+  let nx = e.clientX - r.left;
+  let ny = e.clientY - r.top;
+
+  //grid snapping//
+  nx = Math.round(nx / grid) * grid;
+  ny = Math.round(ny / grid) * grid;
+
+  vertices[draggingPoint].x = nx;
+  vertices[draggingPoint].y = ny;
+
+  drawRoom();
+});
+
+document.addEventListener("mouseup", () => {
+  draggingPoint = null;
+});
+
+canvas.addEventListener("click", e => {
+
+  if (!wallDrawMode) return;
+
+  const r = canvas.getBoundingClientRect();
+
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+
+  const index = getClosestSegment(x, y);
+
+  vertices.splice(index, 0, { x, y });
+
+  wallDrawMode = false;
+
+  canvas.style.cursor = "default";
+
+  drawRoom();
+});
+
+canvas.addEventListener("dblclick", e => {
+
+  const r = canvas.getBoundingClientRect();
+
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+
+  const index = getClosestSegment(x, y);
+
+  vertices.splice(index, 0, { x, y });
+
+  drawRoom();
+});
+
+/* ================= FURNITURE ================= */
+
+const furnitureLayer = document.getElementById("furniture-layer");
+const resizePanel = document.getElementById("resize-panel");
+
+const rw = document.getElementById("rw");
+const rh = document.getElementById("rh");
+
+let furniture = {};
+let nextId = 1;
+
+let draggingFurniture = null;
+let offset = {};
+let selected = null;
+let moveMode = false;
+
+function pointInPolygon(p, poly) {
+
+  let inside = false;
+
+  for (let i=0,j=poly.length-1;i<poly.length;j=i++) {
+
+    const xi=poly[i].x, yi=poly[i].y;
+    const xj=poly[j].x, yj=poly[j].y;
+
+    const intersect =
+      ((yi>p.y)!=(yj>p.y)) &&
+      (p.x < (xj-xi)*(p.y-yi)/(yj-yi)+xi);
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+function rectInsidePolygon(x, y, w, h, poly) {
+
+  const corners = [
+    { x:x, y:y },
+    { x:x+w, y:y },
+    { x:x+w, y:y+h },
+    { x:x, y:y+h }
+  ];
+
+  return corners.every(pt => pointInPolygon(pt, poly));
+}
+
+function overlap(id,x,y,w,h){
+
+  for(const k in furniture){
+
+    if(k===id) continue;
+
+    const o=furniture[k];
+
+    const ox=parseFloat(o.el.style.left);
+    const oy=parseFloat(o.el.style.top);
+
+    const ow = ftToPx(o.wFt);
+    const oh = ftToPx(o.hFt);
+
+    if (
+      x < ox + ow &&
+      x + w > ox &&
+      y < oy + oh &&
+      y + h > oy
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function createFurniture(name,img,wFt,hFt,x,y){
+
+  const id = "f" + nextId++;
+
+  const el = document.createElement("div");
+
+  el.className = "furniture";
+
+  const wPx = ftToPx(wFt);
+  const hPx = ftToPx(hFt);
+
+  el.style.width = wPx + "px";
+  el.style.height = hPx + "px";
+
+  el.style.left = x - wPx/2 + "px";
+  el.style.top = y - hPx/2 + "px";
+
+  furniture[id] = { el, wFt, hFt };
+
+  el.innerHTML = `
+    <img src="${img}">
+  `;
+
+  const ctr = document.createElement("div");
+  ctr.className = "f-controls";
+
+  const del = document.createElement("button");
+  del.textContent = "✕";
+
+  ctr.appendChild(del);
+
+  el.appendChild(ctr);
+
+  del.onclick = e => {
+
+    e.stopPropagation();
+
+    el.remove();
+
+    delete furniture[id];
+
+    resizePanel.style.display = "none";
+  };
+
+  el.onmousedown = e => {
+
+    if(!moveMode) return;
+
+    e.stopPropagation();
+
+    draggingFurniture = id;
+    selected = id;
+    document.querySelectorAll(".furniture")
+      .forEach(f => f.classList.remove("selected"));
+
+    el.classList.add("selected");
+
+    rw.value = furniture[id].wFt;
+    rh.value = furniture[id].hFt;
+
+    resizePanel.style.display = "block";
+
+    const r = el.getBoundingClientRect();
+
+    offset.x = e.clientX - r.left;
+    offset.y = e.clientY - r.top;
+  };
+
+  furnitureLayer.appendChild(el);
+
+  furniture[id] = { el, wFt, hFt };
+}
+
+document.addEventListener("mousemove", e => {
+
+  if(!draggingFurniture) return;
+
+  const it = furniture[draggingFurniture];
+
+  const r = canvas.getBoundingClientRect();
+
+  const nx = e.clientX-r.left-offset.x;
+  const ny = e.clientY-r.top-offset.y;
+
+  const wPx = ftToPx(it.wFt);
+  const hPx = ftToPx(it.hFt);
+
+  if(
+    rectInsidePolygon(nx,ny,wPx,hPx,vertices) &&
+    !overlap(draggingFurniture,nx,ny,wPx,hPx)
+  ){
+    it.el.style.left = nx + "px";
+    it.el.style.top = ny + "px";
+  }
+});
+
+document.addEventListener("mouseup", () => {
+  draggingFurniture = null;
+});
+
+rw.onchange = rh.onchange = () => {
+
+  if(!selected) return;
+
+  const it = furniture[selected];
+
+  const wFt = Math.round(Number(rw.value));
+  const hFt = Math.round(Number(rh.value));
+
+  const x = parseFloat(it.el.style.left);
+  const y = parseFloat(it.el.style.top);
+
+  const wPx = ftToPx(wFt);
+  const hPx = ftToPx(hFt);
+
+  if(
+    rectInsidePolygon(x,y,wPx,hPx,vertices) &&
+    !overlap(selected,x,y,wPx,hPx)
+  ){
+
+    it.wFt = wFt;
+    it.hFt = hFt;
+
+    it.el.style.width = wPx + "px";
+    it.el.style.height = hPx + "px";
+
+  } else {
+
+    rw.value = it.wFt;
+    rh.value = it.hFt;
+  }
+};
+
+document.querySelectorAll(".f-item").forEach(i => {
+
+  i.ondragstart = () => {
+
+    window.dragData = {
+      n: i.dataset.name,
+      img: i.dataset.img,
+      w: +i.dataset.w,
+      h: +i.dataset.h
+    };
+  };
+});
+
+canvas.ondragover = e => e.preventDefault();
+
+canvas.ondrop = e => {
+
+  const r = canvas.getBoundingClientRect();
+
+  createFurniture(
+    dragData.n,
+    dragData.img,
+    dragData.w,
+    dragData.h,
+    e.clientX-r.left,
+    e.clientY-r.top
+  );
+};
+
+window.addEventListener("load", initRoom);
+window.addEventListener("resize", initRoom);
+
+const sizeInfo = document.getElementById("size-info");
+
+const moveBtn = document.getElementById("move-furniture-btn");
+const doneBtn = document.getElementById("done-move-btn");
+
+moveBtn.onclick = () => {
+  moveMode = true;
+  moveBtn.style.display = "none";
+  doneBtn.style.display = "block";
+
+  document.querySelectorAll(".furniture")
+    .forEach(f => f.style.cursor = "move");
+  };
+
+  doneBtn.onclick = () => {
+    moveMode = false;
+    moveBtn.style.display = "block";
+    doneBtn.style.display = "none";
+
+    draggingFurniture = null;
+
+    document.querySelectorAll(".furniture").forEach(f => {
+      f.classList.remove("selected");
+      f.style.cursor = "default";
+    });
+
+    resizePanel.style.display = "none";
+  };
+
+/* ================= SIDEBAR PANELS ================= */
+
+const sidebarItems =
+  document.querySelectorAll(".sidebar-item");
+
+const toolPanel =
+  document.getElementById("tool-panel");
+
+const furnishPanel =
+  document.getElementById("furnish-panel");
+
+const editPanel =
+  document.getElementById("edit-panel");
+
+/* DEFAULT */
+furnishPanel.classList.add("active");
+
+document.getElementById("furnish-tab")
+.onclick = () => {
+
+  sidebarItems.forEach(i =>
+    i.classList.remove("active"));
+
+  document.getElementById("furnish-tab")
+    .classList.add("active");
+
+  furnishPanel.classList.add("active");
+
+  editPanel.classList.remove("active");
+
+  toolPanel.style.transform = "translateX(0)";
+};
+
+document.getElementById("edit-tab")
+.onclick = () => {
+
+  sidebarItems.forEach(i =>
+    i.classList.remove("active"));
+
+  document.getElementById("edit-tab")
+    .classList.add("active");
+
+  editPanel.classList.add("active");
+
+  furnishPanel.classList.remove("active");
+
+  toolPanel.style.transform = "translateX(0)";
+};
+
+function updateSizeInfo(w,h){
+
+  const wf = (w / PIXELS_PER_FOOT).toFixed(2);
+  const hf = (h / PIXELS_PER_FOOT).toFixed(2);
+
+  sizeInfo.textContent = `${wf} ft × ${hf} ft`;
+}
+
+</script>
+
+</body>
+</html>
