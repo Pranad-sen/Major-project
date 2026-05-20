@@ -166,25 +166,33 @@
 
     <main id="main">
 
-        <div id="canvas">
+        <div id = "viewport">
 
-            <svg id="svg"></svg>
+            <div id = "workspace">
 
-            <div id="furniture-layer"></div>
+                    <div id="canvas">
 
-            <div id="resize-panel">
+                        <svg id="svg"></svg>
 
-                <strong>Furniture Size (ft)</strong><br>
+                        <div id="furniture-layer"></div>
 
-                Width (ft):
-                <input id="rw" type="number" step="0.1"><br>
+                        <div id="resize-panel">
 
-                Height (ft):
-                <input id="rh" type="number" step="0.1">
+                            <strong>Furniture Size (ft)</strong><br>
 
+                            Width (ft):
+                            <input id="rw" type="number" step="0.1"><br>
+
+                            Height (ft):
+                            <input id="rh" type="number" step="0.1">
+
+                        </div>
+
+                    </div>
+        
             </div>
 
-        </div>
+        </div>                
 
     </main>
 
@@ -207,6 +215,23 @@ function pxToFt(px) {
 }
 
 let wallDrawMode = false;
+
+let scale = 1;
+
+let panX = 0;
+let panY = 0;
+
+let isPanning = false;
+
+let doublePanMode = false;
+
+let lastClickTime = 0;
+
+let startPan = {
+  x:0,
+  y:0
+};
+
 let wallStartPoint = null;
 
 /* ================= WALL DRAWING ================= */
@@ -222,12 +247,19 @@ document.getElementById("draw-wall-btn").onclick = () => {
 const svg = document.getElementById("svg");
 const canvas = document.getElementById("canvas");
 
+const workspace =
+  document.getElementById("workspace");
+
+const viewport =
+  document.getElementById("viewport");
+
 let vertices = [];
 let draggingPoint = null;
 
 function getClosestSegment(x, y) {
 
   let minDist = Infinity;
+
   let insertIndex = -1;
 
   for (let i = 0; i < vertices.length; i++) {
@@ -240,11 +272,15 @@ function getClosestSegment(x, y) {
 
     const lenSq = dx * dx + dy * dy;
 
+    if (lenSq === 0) continue;
+
+    /* PROJECTION */
     let t =
       ((x - a.x) * dx + (y - a.y) * dy)
       / lenSq;
 
-    t = Math.max(0, Math.min(1, t));
+    /* STRICT SEGMENT RANGE */
+    if (t < 0.05 || t > 0.95) continue;
 
     const px = a.x + t * dx;
     const py = a.y + t * dy;
@@ -252,7 +288,9 @@ function getClosestSegment(x, y) {
     const dist = Math.hypot(x - px, y - py);
 
     if (dist < minDist) {
+
       minDist = dist;
+
       insertIndex = i + 1;
     }
   }
@@ -261,6 +299,42 @@ function getClosestSegment(x, y) {
     index: insertIndex,
     distance: minDist
   };
+}
+
+function screenToWorld(clientX, clientY) {
+
+  const viewportRect =
+    viewport.getBoundingClientRect();
+
+  /* WORKSPACE POSITION */
+  const wx =
+    (clientX - viewportRect.left - panX) / scale;
+
+  const wy =
+    (clientY - viewportRect.top - panY) / scale;
+
+  /* CANVAS POSITION INSIDE WORKSPACE */
+  const canvasX = parseFloat(
+    getComputedStyle(canvas).left
+  );
+
+  const canvasY = parseFloat(
+    getComputedStyle(canvas).top
+  );
+
+  return {
+
+    x: wx - canvasX,
+
+    y: wy - canvasY
+  };
+}
+
+function updateWorkspaceTransform() {
+
+  workspace.style.transform =
+    `translate(${panX}px, ${panY}px)
+     scale(${scale})`;
 }
 
 function initRoom() {
@@ -387,42 +461,135 @@ document.addEventListener("mouseup", () => {
   draggingPoint = null;
 });
 
-canvas.addEventListener("click", e => {
+/* ================= PANNING ================= */
+
+viewport.addEventListener("mousedown", e => {
+
+  const now = Date.now();
+
+  const clickedFurniture =
+    e.target.closest(".furniture");
+
+  const clickedPoint =
+    e.target.closest(".point");
+
+  /* IGNORE OBJECT INTERACTIONS */
+  if (clickedFurniture || clickedPoint) return;
+
+  /* DOUBLE CLICK PAN */
+  if (now - lastClickTime < 300) {
+
+    doublePanMode = true;
+
+    isPanning = true;
+
+    startPan.x = e.clientX - panX;
+    startPan.y = e.clientY - panY;
+
+    viewport.style.cursor = "grabbing";
+  }
+
+  lastClickTime = now;
+
+  /* SPACEBAR OR MIDDLE MOUSE */
+  if (e.button === 1 || spacePressed) {
+
+    isPanning = true;
+
+    startPan.x = e.clientX - panX;
+    startPan.y = e.clientY - panY;
+
+    viewport.style.cursor = "grabbing";
+  }
+});
+
+document.addEventListener("mousemove", e => {
+
+  if (!isPanning) return;
+
+  panX = e.clientX - startPan.x;
+  panY = e.clientY - startPan.y;
+
+  updateWorkspaceTransform();
+});
+
+document.addEventListener("mouseup", () => {
+
+  isPanning = false;
+
+  doublePanMode = false;
+
+  viewport.style.cursor = "default";
+});
+
+/* ================= ZOOM ================= */
+
+viewport.addEventListener("wheel", e => {
+
+  e.preventDefault();
+
+  const rect =
+    viewport.getBoundingClientRect();
+
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const wx = (mx - panX) / scale;
+  const wy = (my - panY) / scale;
+
+  /* SYMMETRIC ZOOM */
+  const zoomIntensity = 0.0045;
+
+  const zoom =
+    Math.exp(-e.deltaY * zoomIntensity);
+
+  scale *= zoom;
+
+  scale = Math.max(0.2, Math.min(4, scale));
+
+  panX = mx - wx * scale;
+  panY = my - wy * scale;
+
+  updateWorkspaceTransform();
+
+}, { passive:false });
+
+
+
+svg.addEventListener("click", e => {
 
   if (!wallDrawMode) return;
 
-  const r = canvas.getBoundingClientRect();
+  if (e.target.closest(".furniture")) return;
 
-  const x = e.clientX - r.left;
-  const y = e.clientY - r.top;
+  const world =
+    screenToWorld(e.clientX, e.clientY);
 
-  const index = getClosestSegment(x, y);
+  const result =
+    getClosestSegment(world.x, world.y);
 
-  vertices.splice(index, 0, { x, y });
+  /* CLICK NOT CLOSE ENOUGH */
+  if (result.distance > 40) {
+
+    wallDrawMode = false;
+
+    canvas.style.cursor = "default";
+
+    return;
+  }
+
+  vertices.splice(
+    result.index,
+    0,
+    {
+      x: world.x,
+      y: world.y
+    }
+  );
 
   wallDrawMode = false;
 
   canvas.style.cursor = "default";
-
-  drawRoom();
-});
-
-canvas.addEventListener("dblclick", e => {
-
-  /* IGNORE FURNITURE */
-  if (e.target.closest(".furniture")) return;
-
-  const r = canvas.getBoundingClientRect();
-
-  const x = e.clientX - r.left;
-  const y = e.clientY - r.top;
-
-  const result = getClosestSegment(x, y);
-
-  /* ONLY IF CLOSE TO WALL */
-  if (result.distance > 15) return;
-
-  vertices.splice(result.index, 0, { x, y });
 
   drawRoom();
 });
@@ -563,10 +730,17 @@ function createFurniture(name,img,wFt,hFt,x,y){
 
     resizePanel.style.display = "block";
 
-    const r = el.getBoundingClientRect();
+    const world =
+        screenToWorld(e.clientX, e.clientY);
 
-    offset.x = e.clientX - r.left;
-    offset.y = e.clientY - r.top;
+    const left =
+        parseFloat(el.style.left);
+
+    const top =
+        parseFloat(el.style.top);
+
+    offset.x = world.x - left;
+    offset.y = world.y - top;
   };
 
   furnitureLayer.appendChild(el);
@@ -580,10 +754,11 @@ document.addEventListener("mousemove", e => {
 
   const it = furniture[draggingFurniture];
 
-  const r = canvas.getBoundingClientRect();
+    const world =
+        screenToWorld(e.clientX, e.clientY);
 
-  const nx = e.clientX-r.left-offset.x;
-  const ny = e.clientY-r.top-offset.y;
+    const nx = world.x - offset.x;
+    const ny = world.y - offset.y;
 
   const wPx = ftToPx(it.wFt);
   const hPx = ftToPx(it.hFt);
@@ -651,19 +826,41 @@ canvas.ondragover = e => e.preventDefault();
 
 canvas.ondrop = e => {
 
-  const r = canvas.getBoundingClientRect();
+  const world =
+    screenToWorld(e.clientX, e.clientY);
 
   createFurniture(
     dragData.n,
     dragData.img,
     dragData.w,
     dragData.h,
-    e.clientX-r.left,
-    e.clientY-r.top
+    world.x,
+    world.y
   );
 };
 
-window.addEventListener("load", initRoom);
+window.addEventListener("load", () => {
+
+  initRoom();
+
+  const viewportRect =
+    viewport.getBoundingClientRect();
+
+  const canvasRect =
+    canvas.getBoundingClientRect();
+
+  /* CENTER CANVAS INSIDE VIEWPORT */
+  panX =
+    viewportRect.width / 2
+    - 2400;
+
+  panY =
+    viewportRect.height / 2
+    - 2250;
+
+  updateWorkspaceTransform();
+});
+
 window.addEventListener("resize", initRoom);
 
 const sizeInfo = document.getElementById("size-info");

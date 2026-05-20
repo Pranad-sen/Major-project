@@ -1,0 +1,465 @@
+/* ========== GLOBAL ========== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Segoe UI, system-ui;
+}
+
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #eef6fb;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ========== TOPBAR ========== */
+
+#topbar {
+  height: 64px;
+  background: #ffffff;
+  border-bottom: 1px solid #dcdcdc;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 18px;
+
+  z-index: 100;
+}
+
+/* LEFT + RIGHT */
+#topbar-left,
+#topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* LOGO */
+#logo {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f1f1f;
+
+  margin-right: 10px;
+}
+
+/* BUTTONS */
+.top-btn,
+.top-icon-btn {
+
+  height: 40px;
+
+  padding: 0 16px;
+
+  border-radius: 12px;
+
+  background: #f4f4f4;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  transition: .2s;
+}
+
+.top-btn:hover,
+.top-icon-btn:hover {
+  background: #e8e8e8;
+}
+
+/* PROFILE */
+#profile-btn {
+  position: relative;
+  cursor: pointer;
+}
+
+#profile-avatar {
+
+  width: 40px;
+  height: 40px;
+
+  border-radius: 50%;
+
+  background: #1a73e8;
+  color: white;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-weight: bold;
+}
+
+/* HOVER MENU */
+#profile-hover-menu {
+
+  position: absolute;
+
+  top: 44px;
+  right: 0;
+
+  width: 180px;
+
+  background: white;
+
+  border-radius: 12px;
+
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+
+  display: none;
+
+  overflow: hidden;
+  padding-top: 12px;
+}
+
+#profile-btn:hover #profile-hover-menu {
+  display: block;
+}
+
+.profile-item {
+
+  padding: 14px 16px;
+
+  cursor: pointer;
+
+  transition: .2s;
+}
+
+.profile-item:hover {
+  background: #f4f4f4;
+}
+
+/* ========== APP LAYOUT ========== */
+#app {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ========== SIDEBAR ========== */
+
+#sidebar {
+
+  width: 80px;
+
+  background: white;
+
+  border-right: 1px solid #e2e2e2;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  padding-top: 18px;
+
+  gap: 18px;
+}
+
+/* SIDEBAR ITEMS */
+
+.sidebar-item {
+
+  width: 64px;
+
+  border-radius: 16px;
+
+  padding: 12px 6px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+
+  cursor: pointer;
+
+  transition: .2s;
+
+  color: #444;
+
+  font-size: 13px;
+}
+
+.sidebar-item:hover {
+  background: #f2f2f2;
+}
+
+.sidebar-item.active {
+  background: #e8f0ff;
+  color: #1a73e8;
+}
+
+/* TOOL PANEL */
+
+#tool-panel {
+
+  width: 260px;
+
+  background: #fafafa;
+
+  border-right: 1px solid #e2e2e2;
+
+  padding: 16px;
+
+  overflow-y: auto;
+
+  transform: translateX(0);
+
+  transition: .3s;
+}
+
+/* TOOL BUTTONS */
+
+#tool-panel button {
+
+  width: 100%;
+
+  height: 42px;
+
+  border: none;
+
+  border-radius: 12px;
+
+  background: #1a73e8;
+
+  color: white;
+
+  margin-bottom: 12px;
+
+  cursor: pointer;
+
+  font-size: 14px;
+
+  transition: .2s;
+}
+
+#tool-panel button:hover {
+  background: #155cc4;
+}
+
+/* FURNITURE ITEMS */
+
+.f-item {
+
+  background: white;
+
+  border: 1px solid #e2e2e2;
+
+  text-align: center;
+
+  padding: 10px;
+
+  border-radius: 16px;
+
+  margin-bottom: 12px;
+
+  cursor: grab;
+
+  transition: .2s;
+}
+
+.f-item:hover {
+  transform: translateY(-2px);
+
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+}
+
+.f-item img {
+
+  width: 100%;
+
+  height: 80px;
+
+  object-fit: contain;
+
+  pointer-events: none;
+}
+
+.panel-section {
+  display: none;
+}
+
+.panel-section.active {
+  display: block;
+}
+
+/* ========== MAIN AREA ========== */
+
+#main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* VIEWPORT */
+
+#viewport {
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
+
+  position: relative;
+
+  background: #eef6fb;
+}
+
+/* WORKSPACE */
+
+#workspace {
+
+  position: absolute;
+
+  left: 0;
+  top: 0;
+
+  width: 5000px;
+  height: 5000px;
+
+  transform-origin: top left;
+
+  background:
+    linear-gradient(to right,
+      rgba(0,0,0,.08) 1px,
+      transparent 1px),
+
+    linear-gradient(to bottom,
+      rgba(0,0,0,.08) 1px,
+      transparent 1px);
+
+  background-size: 20px 20px;
+}
+
+/* ========== CANVAS ========== */
+
+#canvas {
+
+  width: 1200px;
+  height: 900px;
+
+  position: absolute;
+
+  left: 1800px;
+  top: 1800px;
+
+  border-radius: 16px;
+
+  overflow: visible;
+}
+
+/* ========== SVG ROOM ========== */
+#svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: all;
+}
+
+.wall {
+  stroke: #555;
+  stroke-width: 5;
+  stroke-linecap: round;
+  fill: none;
+
+  cursor: crosshair;
+
+  pointer-events: stroke;
+}
+
+.point {
+  fill: #fff;
+  stroke: #333;
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.wall-label {
+  fill: #000;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* ========== FURNITURE ========== */
+#furniture-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.furniture {
+  position: absolute;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 4px;
+  cursor: move;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.furniture.selected {
+  border-color: #0070ff;
+  box-shadow: 0 0 8px rgba(0,112,255,0.5);
+}
+
+.furniture img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.f-controls {
+  position: absolute;
+  top: -18px;
+  right: -18px;
+  opacity: 0;
+}
+
+.furniture:hover .f-controls {
+  opacity: 1;
+}
+
+.f-controls button {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: #0070ff;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* ========== RESIZE PANEL ========== */
+#resize-panel {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: #fff;
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  display: none;
+  z-index: 10;
+}
+
+#resize-panel input {
+  width: 70px;
+  margin-top: 4px;
+}
