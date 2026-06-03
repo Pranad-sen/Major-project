@@ -233,6 +233,8 @@ let startPan = {
 };
 
 let wallStartPoint = null;
+let undoStack = [];
+let redoStack = [];
 
 /* ================= WALL DRAWING ================= */
 
@@ -330,6 +332,110 @@ function screenToWorld(clientX, clientY) {
   };
 }
 
+function saveState() {
+
+  const newState = {
+
+    vertices:
+      JSON.parse(JSON.stringify(vertices)),
+
+    furniture:
+      JSON.parse(
+        JSON.stringify(
+          getFurnitureSnapshot()
+        )
+      )
+  };
+
+  if (undoStack.length > 0) {
+
+    const lastState =
+      JSON.stringify(
+        undoStack[
+          undoStack.length - 1
+        ]
+      );
+
+    const currentState =
+      JSON.stringify(newState);
+
+    if (lastState === currentState)
+      return;
+  }
+
+  undoStack.push(newState);
+
+  if (undoStack.length > 50) {
+    undoStack.shift();
+  }
+
+  redoStack = [];
+}
+
+function getFurnitureSnapshot() {
+
+  const furnitureState = {};
+
+  for (const id in furniture) {
+
+    furnitureState[id] = {
+
+      left: furniture[id].el.style.left,
+      top: furniture[id].el.style.top,
+
+      wFt: furniture[id].wFt,
+      hFt: furniture[id].hFt,
+
+      img:
+        furniture[id]
+          .el
+          .querySelector("img")
+          .src
+    };
+  }
+
+  return furnitureState;
+}
+
+function restoreState(state) {
+
+  vertices =
+    JSON.parse(
+      JSON.stringify(state.vertices)
+    );
+
+  furnitureLayer.innerHTML = "";
+
+  furniture = {};
+
+  for (const id in state.furniture) {
+
+  const item =
+    state.furniture[id];
+
+  const x =
+    parseFloat(item.left);
+
+  const y =
+    parseFloat(item.top);
+
+  createFurnitureElement(
+    "",
+    item.img,
+    item.wFt,
+    item.hFt,
+    x + ftToPx(item.wFt)/2,
+    y + ftToPx(item.hFt)/2
+  );
+}
+
+  selected = null;
+
+  resizePanel.style.display = "none";
+
+  drawRoom();
+}
+
 function updateWorkspaceTransform() {
 
   workspace.style.transform =
@@ -421,7 +527,12 @@ for (let i = 0; i < vertices.length; i++) {
     c.setAttribute("r", 6);
     c.setAttribute("class", "point");
 
-    c.onmousedown = () => draggingPoint = i;
+    c.onmousedown = e => {
+
+      e.stopPropagation();
+
+      draggingPoint = i;
+    };
 
     c.oncontextmenu = e => {
 
@@ -430,6 +541,7 @@ for (let i = 0; i < vertices.length; i++) {
       if (vertices.length > 3) {
         vertices.splice(i,1);
         drawRoom();
+        saveState();
       }
     };
     svg.appendChild(c);
@@ -439,6 +551,13 @@ for (let i = 0; i < vertices.length; i++) {
 document.addEventListener("mousemove", e => {
 
   if (draggingPoint === null) return;
+
+  if (e.buttons === 0) {
+
+    draggingPoint = null;
+
+    return;
+  }
 
   const r = canvas.getBoundingClientRect();
 
@@ -458,7 +577,20 @@ document.addEventListener("mousemove", e => {
 });
 
 document.addEventListener("mouseup", () => {
-  draggingPoint = null;
+
+  if (draggingPoint !== null) {
+
+    saveState();
+
+    draggingPoint = null;
+  }
+
+  if (draggingFurniture) {
+
+    saveState();
+
+    draggingFurniture = null;
+  }
 });
 
 /* ================= PANNING ================= */
@@ -592,6 +724,7 @@ svg.addEventListener("click", e => {
   canvas.style.cursor = "default";
 
   drawRoom();
+  saveState();
 });
 
 /* ================= FURNITURE ================= */
@@ -668,7 +801,7 @@ function overlap(id,x,y,w,h){
   return false;
 }
 
-function createFurniture(name,img,wFt,hFt,x,y){
+function createFurnitureElement(name,img,wFt,hFt,x,y){
 
   const id = "f" + nextId++;
 
@@ -710,6 +843,8 @@ function createFurniture(name,img,wFt,hFt,x,y){
     delete furniture[id];
 
     resizePanel.style.display = "none";
+
+    saveState();
   };
 
   el.onmousedown = e => {
@@ -746,6 +881,24 @@ function createFurniture(name,img,wFt,hFt,x,y){
   furnitureLayer.appendChild(el);
 
   furniture[id] = { el, wFt, hFt };
+}
+
+function createFurniture(
+  name,
+  img,
+  wFt,
+  hFt,
+  x,
+  y
+){
+  createFurnitureElement(
+    name,
+    img,
+    wFt,
+    hFt,
+    x,
+    y
+  );
 }
 
 document.addEventListener("mousemove", e => {
@@ -801,6 +954,7 @@ rw.onchange = rh.onchange = () => {
 
     it.el.style.width = wPx + "px";
     it.el.style.height = hPx + "px";
+    saveState();
 
   } else {
 
@@ -837,11 +991,14 @@ canvas.ondrop = e => {
     world.x,
     world.y
   );
+  saveState();
 };
 
 window.addEventListener("load", () => {
 
   initRoom();
+
+  saveState();
 
   const viewportRect =
     viewport.getBoundingClientRect();
@@ -862,6 +1019,61 @@ window.addEventListener("load", () => {
 });
 
 window.addEventListener("resize", initRoom);
+
+document
+  .getElementById("undo-btn")
+  .onclick = () => {
+
+  if (undoStack.length <= 1)
+    return;
+
+  const current =
+    undoStack.pop();
+
+  redoStack.push(current);
+
+  restoreState(
+    undoStack[
+      undoStack.length - 1
+    ]
+  );
+};
+
+document
+  .getElementById("redo-btn")
+  .onclick = () => {
+
+  if (redoStack.length === 0)
+    return;
+
+  const state =
+    redoStack.pop();
+
+  undoStack.push(state);
+
+  restoreState(state);
+};
+
+document.addEventListener("keydown", e => {
+
+  if (e.ctrlKey && e.key.toLowerCase() === "z") {
+
+    e.preventDefault();
+
+    document
+      .getElementById("undo-btn")
+      .click();
+  }
+
+  if (e.ctrlKey && e.key.toLowerCase() === "y") {
+
+    e.preventDefault();
+
+    document
+      .getElementById("redo-btn")
+      .click();
+  }
+});
 
 const sizeInfo = document.getElementById("size-info");
 
