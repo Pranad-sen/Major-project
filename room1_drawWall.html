@@ -233,6 +233,12 @@ let startPan = {
 };
 
 let wallStartPoint = null;
+
+let interiorWalls = [];
+
+let previewWall = null;
+let selectedWall = null;
+
 let undoStack = [];
 let redoStack = [];
 
@@ -241,6 +247,12 @@ let redoStack = [];
 document.getElementById("draw-wall-btn").onclick = () => {
 
   wallDrawMode = true;
+
+  drawWallStage = 0;
+
+  drawWallStart = null;
+
+  previewWall = null;
 
   canvas.style.cursor = "crosshair";
 };
@@ -257,6 +269,14 @@ const viewport =
 
 let vertices = [];
 let draggingPoint = null;
+let drawWallStart = null;
+let drawWallStage = 0;
+let lastWallClickTime = 0;
+
+let mouseWorld = {
+  x: 0,
+  y: 0
+};
 
 function getClosestSegment(x, y) {
 
@@ -332,20 +352,115 @@ function screenToWorld(clientX, clientY) {
   };
 }
 
+function getNearestWallPoint(x, y) {
+
+  let best = null;
+  let bestDist = Infinity;
+
+  /* ROOM WALLS */
+
+  for (let i = 0; i < vertices.length; i++) {
+
+    const a = vertices[i];
+    const b = vertices[(i + 1) % vertices.length];
+
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+
+    const lenSq = dx * dx + dy * dy;
+
+    if (lenSq === 0) continue;
+
+    let t =
+      ((x - a.x) * dx +
+       (y - a.y) * dy) / lenSq;
+
+    t = Math.max(0, Math.min(1, t));
+
+    const px = a.x + t * dx;
+    const py = a.y + t * dy;
+
+    const dist =
+      Math.hypot(
+        x - px,
+        y - py
+      );
+
+    if (dist < bestDist) {
+
+      bestDist = dist;
+
+      best = {
+        x: px,
+        y: py
+      };
+    }
+  }
+
+  /* INTERIOR WALLS */
+
+  interiorWalls.forEach(w => {
+
+    const dx = w.x2 - w.x1;
+    const dy = w.y2 - w.y1;
+
+    const lenSq =
+      dx * dx + dy * dy;
+
+    if (lenSq === 0) return;
+
+    let t =
+      ((x - w.x1) * dx +
+       (y - w.y1) * dy) / lenSq;
+
+    t = Math.max(0, Math.min(1, t));
+
+    const px =
+      w.x1 + t * dx;
+
+    const py =
+      w.y1 + t * dy;
+
+    const dist =
+      Math.hypot(
+        x - px,
+        y - py
+      );
+
+    if (dist < bestDist) {
+
+      bestDist = dist;
+
+      best = {
+        x: px,
+        y: py
+      };
+    }
+
+  });
+
+  return best;
+}
+
 function saveState() {
 
-  const newState = {
+    const newState = {
 
-    vertices:
-      JSON.parse(JSON.stringify(vertices)),
+        vertices:
+            JSON.parse(JSON.stringify(vertices)),
 
-    furniture:
-      JSON.parse(
-        JSON.stringify(
-          getFurnitureSnapshot()
-        )
-      )
-  };
+        interiorWalls:
+            JSON.parse(
+                JSON.stringify(interiorWalls)
+            ),
+
+        furniture:
+            JSON.parse(
+                JSON.stringify(
+                    getFurnitureSnapshot()
+                )
+            )
+    };
 
   if (undoStack.length > 0) {
 
@@ -403,6 +518,13 @@ function restoreState(state) {
     JSON.parse(
       JSON.stringify(state.vertices)
     );
+
+  interiorWalls =
+    JSON.parse(
+        JSON.stringify(
+            state.interiorWalls || []
+        )
+    );  
 
   furnitureLayer.innerHTML = "";
 
@@ -620,6 +742,260 @@ path.setAttribute("class", "wall");
 
 svg.appendChild(path);
 
+/* ===== INTERIOR WALLS ===== */
+
+interiorWalls.forEach(w => {
+
+  const line =
+    document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "line"
+    );
+
+  line.setAttribute("x1", w.x1);
+  line.setAttribute("y1", w.y1);
+
+  line.setAttribute("x2", w.x2);
+  line.setAttribute("y2", w.y2);
+
+  line.setAttribute(
+    "stroke",
+    selectedWall === w
+        ? "#4a90e2"
+        : "#555"
+  );
+  line.setAttribute("stroke-width", "4");
+
+  svg.appendChild(line);
+});
+
+/* ===== PREVIEW WALL ===== */
+
+if (previewWall) {
+
+  const preview =
+    document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "line"
+    );
+
+  preview.setAttribute(
+    "x1",
+    previewWall.x1
+  );
+
+  preview.setAttribute(
+    "y1",
+    previewWall.y1
+  );
+
+  preview.setAttribute(
+    "x2",
+    previewWall.x2
+  );
+
+  preview.setAttribute(
+    "y2",
+    previewWall.y2
+  );
+
+  preview.setAttribute(
+    "stroke",
+    "#4a90e2"
+  );
+
+  preview.setAttribute(
+    "stroke-width",
+    "3"
+  );
+
+  preview.setAttribute(
+    "stroke-dasharray",
+    "8 6"
+  );
+
+  svg.appendChild(preview);
+
+  const previewLenFt =
+    Math.hypot(
+        previewWall.x2 - previewWall.x1,
+        previewWall.y2 - previewWall.y1
+    ) / PIXELS_PER_FOOT;
+
+    const previewText =
+        document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "text"
+        );
+
+    previewText.setAttribute(
+        "x",
+        (previewWall.x1 + previewWall.x2) / 2
+    );
+
+    previewText.setAttribute(
+        "y",
+        (previewWall.y1 + previewWall.y2) / 2 - 20
+    );
+
+    previewText.setAttribute(
+        "text-anchor",
+        "middle"
+    );
+
+    previewText.setAttribute(
+        "class",
+        "wall-label"
+    );
+
+    previewText.textContent =
+        previewLenFt.toFixed(1) + " ft";
+
+    svg.appendChild(previewText);
+}
+
+/* ===== INTERIOR WALL DIMENSIONS ===== */
+
+interiorWalls.forEach(w => {
+
+    if (selectedWall !== w)
+        return;
+
+  const dx = w.x2 - w.x1;
+  const dy = w.y2 - w.y1;
+
+  const wallLength =
+    Math.hypot(dx, dy);
+
+  if (wallLength === 0)
+    return;
+
+  const lenFt =
+    wallLength / PIXELS_PER_FOOT;
+
+    let nx = -dy / wallLength;
+    let ny = dx / wallLength;
+
+    /* FORCE DIMENSIONS OUTSIDE */
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+
+        /* horizontal wall */
+
+        nx = 0;
+        ny = -1;
+
+    } else {
+
+        /* vertical wall */
+
+        nx = -1;
+        ny = 0;
+    }
+
+    const offset = 15;
+
+  const ax =
+    w.x1 + nx * offset;
+
+  const ay =
+    w.y1 + ny * offset;
+
+  const bx =
+    w.x2 + nx * offset;
+
+  const by =
+    w.y2 + ny * offset;
+
+  const dimLine =
+    document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "line"
+    );
+
+  dimLine.setAttribute(
+    "x1",
+    ax
+  );
+
+  dimLine.setAttribute(
+    "y1",
+    ay
+  );
+
+  dimLine.setAttribute(
+    "x2",
+    bx
+  );
+
+  dimLine.setAttribute(
+    "y2",
+    by
+  );
+
+  dimLine.setAttribute(
+    "stroke",
+    selectedWall === w
+      ? "#4a90e2"
+      : "#999"
+  );
+
+  dimLine.setAttribute(
+    "stroke-width",
+    "1"
+  );
+
+  dimLine.setAttribute(
+    "marker-start",
+    "url(#leftArrow)"
+  );
+
+  dimLine.setAttribute(
+    "marker-end",
+    "url(#rightArrow)"
+  );
+
+  svg.appendChild(dimLine);
+
+  const text =
+    document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "text"
+    );
+
+  text.setAttribute(
+    "x",
+    (ax + bx) / 2 +
+      nx * 20
+  );
+
+  text.setAttribute(
+    "y",
+    (ay + by) / 2 +
+      ny * 20
+  );
+
+  text.setAttribute(
+    "text-anchor",
+    "middle"
+  );
+
+  text.setAttribute(
+    "dominant-baseline",
+    "middle"
+  );
+
+  text.setAttribute(
+    "class",
+    "wall-label"
+  );
+
+  text.textContent =
+    lenFt.toFixed(1) + " ft";
+
+  svg.appendChild(text);
+});
+
 /* ===== DIMENSIONS ===== */
 
 for (let i = 0; i < vertices.length; i++) {
@@ -680,7 +1056,7 @@ for (let i = 0; i < vertices.length; i++) {
     ny *= -1;
   }
 
-  const offset = 30;
+  const offset = 15;
 
   const ax = a.x + nx * offset;
   const ay = a.y + ny * offset;
@@ -850,6 +1226,39 @@ document.addEventListener("mousemove", e => {
   drawRoom();
 });
 
+document.addEventListener("mousemove", e => {
+
+  if (!wallDrawMode) return;
+
+  const world =
+    screenToWorld(
+      e.clientX,
+      e.clientY
+    );
+
+  const grid = 20;
+
+  mouseWorld.x =
+    Math.round(world.x / grid) * grid;
+
+  mouseWorld.y =
+    Math.round(world.y / grid) * grid;
+
+  if (drawWallStart) {
+
+    previewWall = {
+
+      x1: drawWallStart.x,
+      y1: drawWallStart.y,
+
+      x2: mouseWorld.x,
+      y2: mouseWorld.y
+    };
+
+    drawRoom();
+  }
+});
+
 document.addEventListener("mouseup", () => {
 
   if (draggingPoint !== null) {
@@ -960,8 +1369,193 @@ viewport.addEventListener("wheel", e => {
 
 }, { passive:false });
 
+svg.addEventListener("click", e => {
+
+  if (!wallDrawMode) return;
+
+    const now = Date.now();
+
+    if (
+        drawWallStage === 1 &&
+        now - lastWallClickTime < 300
+    ) {
+
+        wallDrawMode = false;
+
+        drawWallStage = 0;
+
+        drawWallStart = null;
+
+        previewWall = null;
+
+        canvas.style.cursor = "default";
+
+        drawRoom();
+
+        return;
+    }
+
+    lastWallClickTime = now;
+
+  const world =
+    screenToWorld(
+      e.clientX,
+      e.clientY
+    );
+
+  const grid = 20;
+
+  const x =
+    Math.round(world.x / grid) * grid;
+
+  const y =
+    Math.round(world.y / grid) * grid;
+
+  /* FIRST CLICK */
+
+    if (drawWallStage === 0) {
+
+        const snap =
+            getNearestWallPoint(
+                x,
+                y
+            );
+
+    if (!snap) return;
+
+    const maxDistance = 40;
+
+    if (
+        Math.hypot(
+            x - snap.x,
+            y - snap.y
+        ) > maxDistance
+    ) {
+        return;
+    }
+
+    drawWallStart = {
+
+        x:
+            Math.round(snap.x / 20) * 20,
+
+        y:
+            Math.round(snap.y / 20) * 20
+    };
+
+    drawWallStage = 1;
+
+    return;
+}
+
+  /* SECOND CLICK */
+
+    let endX = x;
+    let endY = y;
+
+    /* SNAP ENDPOINT TO WALLS */
+
+    const endSnap =
+        getNearestWallPoint(
+            x,
+            y
+        );
+
+    if (
+        endSnap &&
+        Math.hypot(
+            x - endSnap.x,
+            y - endSnap.y
+        ) < 40
+    ) {
+
+        endX =
+            Math.round(endSnap.x / 20) * 20;
+
+        endY =
+            Math.round(endSnap.y / 20) * 20;
+    }
+
+    interiorWalls.push({
+
+        x1: drawWallStart.x,
+        y1: drawWallStart.y,
+
+        x2: endX,
+        y2: endY
+    });
+
+    saveState();
+
+    drawWallStart = {
+
+        x: endX,
+        y: endY
+    };
+
+    previewWall = null;
+
+    drawRoom();
+});
+
+svg.addEventListener("mousedown", e => {
+
+  if (wallDrawMode) return;
+
+  const world =
+    screenToWorld(
+      e.clientX,
+      e.clientY
+    );
+
+  selectedWall = null;
+
+  for (const w of interiorWalls) {
+
+    const dx = w.x2 - w.x1;
+    const dy = w.y2 - w.y1;
+
+    const lenSq =
+      dx * dx + dy * dy;
+
+    if (lenSq === 0)
+      continue;
+
+    let t =
+      ((world.x - w.x1) * dx +
+       (world.y - w.y1) * dy)
+      / lenSq;
+
+    t = Math.max(
+      0,
+      Math.min(1, t)
+    );
+
+    const px =
+      w.x1 + t * dx;
+
+    const py =
+      w.y1 + t * dy;
+
+    const dist =
+      Math.hypot(
+        world.x - px,
+        world.y - py
+      );
+
+    if (dist < 10) {
+
+      selectedWall = w;
+
+      break;
+    }
+  }
+
+  drawRoom();
+});
 
 
+/*
 svg.addEventListener("click", e => {
 
   if (!wallDrawMode) return;
@@ -974,7 +1568,7 @@ svg.addEventListener("click", e => {
   const result =
     getClosestSegment(world.x, world.y);
 
-  /* CLICK NOT CLOSE ENOUGH */
+  CLICK NOT CLOSE ENOUGH 
   if (result.distance > 40) {
 
     wallDrawMode = false;
@@ -999,7 +1593,7 @@ svg.addEventListener("click", e => {
 
   drawRoom();
   saveState();
-});
+});*/
 
 /* ================= FURNITURE ================= */
 
@@ -1270,26 +1864,28 @@ canvas.ondrop = e => {
 
 window.addEventListener("load", () => {
 
-  initRoom();
+    initRoom();
 
-  saveState();
+    drawRoom();
 
-  const viewportRect =
-    viewport.getBoundingClientRect();
+    saveState();
 
-  const canvasRect =
-    canvas.getBoundingClientRect();
+    const viewportRect =
+        viewport.getBoundingClientRect();
 
-  /* CENTER CANVAS INSIDE VIEWPORT */
-  panX =
-    viewportRect.width / 2
-    - 2400;
+    const canvasRect =
+        canvas.getBoundingClientRect();
 
-  panY =
-    viewportRect.height / 2
-    - 2250;
+    /* CENTER CANVAS INSIDE VIEWPORT */
+    panX =
+        viewportRect.width / 2
+        - 2400;
 
-  updateWorkspaceTransform();
+    panY =
+        viewportRect.height / 2
+        - 2250;
+
+    updateWorkspaceTransform();
 });
 
 window.addEventListener("resize", initRoom);
@@ -1346,7 +1942,32 @@ document.addEventListener("keydown", e => {
     document
       .getElementById("redo-btn")
       .click();
-  }
+    }
+
+    if (
+        e.key === "Delete" &&
+        selectedWall
+    ) {
+
+        const idx =
+            interiorWalls.indexOf(
+                selectedWall
+            );
+
+        if (idx !== -1) {
+
+            interiorWalls.splice(
+                idx,
+                1
+            );
+
+            selectedWall = null;
+
+            saveState();
+
+            drawRoom();
+        }
+    }
 });
 
 const sizeInfo = document.getElementById("size-info");
