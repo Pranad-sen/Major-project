@@ -92,8 +92,8 @@
         <h2>Login</h2>
         <form id="loginForm">
             <div class="input-group">
-                <label for="username">E-mail</label>
-                <input type="email" id="username" placeholder="Enter e-mail" required>
+                <label for="email">e-mail</label>
+                <input type="email" id="e-mail" placeholder="Enter e-mail" required>
             </div>
 
             <div class="input-group">
@@ -131,7 +131,7 @@
 
             e.preventDefault();
 
-            const email = document.getElementById("username").value;
+            const email = document.getElementById("e-mail").value;
             const password = document.getElementById("password").value;
 
             try{
