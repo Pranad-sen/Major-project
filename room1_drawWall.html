@@ -49,22 +49,33 @@
       🔗 Share
     </div>
 
+    <div class="top-icon-btn" id="save-project-btn">
+      💾 Save
+    </div>
+
     <div id="profile-btn">
       <div id="profile-avatar">
         U
       </div>
+      <div id="profile-name">
+        
+      </div>
 
       <div id="profile-hover-menu">
 
-        <div class="profile-item">
+        <div class="profile-item" id = "profile-fullname">
+          Loading...
+        </div>
+
+        <div class="profile-item" id="my-projects-btn">
           My Projects
         </div>
 
-        <div class="profile-item">
-          Settings
+        <div class="profile-item" id="delete-project-btn">
+          Delete Project
         </div>
 
-        <div class="profile-item">
+        <div class="profile-item" id="logout-btn">
           Logout
         </div>
 
@@ -109,19 +120,35 @@
 
     <div id="tool-panel">
 
+      <!-- BUILD PANEL -->
+      <div class="panel-section" id="build-panel">
+
+        <button id="draw-wall-btn">
+          Draw Wall
+        </button>
+
+        <button id="add-door-btn">
+          Add Door
+        </button>
+      </div>
+
         <!-- EDIT PANEL -->
         <div class="panel-section" id="edit-panel">
-
-            <button id="draw-wall-btn">
-                Draw Wall
-            </button>
 
             <button id="move-furniture-btn">
                 Move Furniture
             </button>
 
+            <button id="rotate-furniture-btn">
+              Rotate Furniture
+            </button>
+
             <button id="done-move-btn" style="display:none;">
                 ✓ Done
+            </button>
+
+            <button id="add-label-btn">
+              Add Label
             </button>
         </div>
 
@@ -176,17 +203,7 @@
 
                         <div id="furniture-layer"></div>
 
-                        <div id="resize-panel">
-
-                            <strong>Furniture Size (ft)</strong><br>
-
-                            Width (ft):
-                            <input id="rw" type="number" step="0.1"><br>
-
-                            Height (ft):
-                            <input id="rh" type="number" step="0.1">
-
-                        </div>
+                        
 
                     </div>
         
@@ -200,8 +217,126 @@
 
 <div id="size-info"></div>
 
-<script>
+<div id="resize-panel">
+  <strong>Furniture Size (ft)</strong><br>
+      Width (ft):
+      <input id="rw" type="number" step="0.1"><br>
 
+      Height (ft):
+      <input id="rh" type="number" step="0.1">
+</div>
+
+<script type="module">
+  import { initializeApp }
+  from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+
+  import {
+    getAuth,
+    onAuthStateChanged,
+    signOut
+  }
+  from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    collection,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    serverTimestamp,
+    getDocs,
+    query,
+    where
+  }
+  from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+
+    apiKey:
+      "AIzaSyBJCBoVlZNxFma6ZpBZrTE6MH224jAIyk4",
+
+    authDomain:
+      "virtual-room-organiser.firebaseapp.com",
+
+    projectId:
+      "virtual-room-organiser",
+
+    storageBucket:
+      "virtual-room-organiser.firebasestorage.app",
+
+    messagingSenderId:
+      "831325947967",
+
+    appId:
+      "1:831325947967:web:94147021fd4e51efe1108a"
+  };
+
+  const app =
+    initializeApp(
+      firebaseConfig
+    );
+
+  const auth =
+    getAuth(app);
+
+  const db =
+    getFirestore(app);
+
+  onAuthStateChanged(
+    auth,
+    async(user)=>{
+
+      if(!user){
+
+        window.location.href =
+          "login.html";
+
+        return;
+      }
+
+      const snap =
+        await getDoc(
+
+          doc(
+            db,
+            "users",
+            user.uid
+          )
+        );
+
+      if(!snap.exists())
+        return;
+
+      const data =
+        snap.data();
+
+      document
+        .getElementById(
+          "profile-fullname"
+        )
+        .textContent =
+        data.fullname;
+
+      document
+        .getElementById(
+          "profile-avatar"
+        )
+        .textContent =
+        data.fullname
+          .charAt(0)
+          .toUpperCase();
+
+      document.getElementById(
+        "profile-avatar")
+      .textContent = 
+      data.fullname
+        .charAt(0)
+        .toUpperCase();
+    
+  });
 /* ================= CONFIG ================= */
 
 const PIXELS_PER_FOOT = 50;
@@ -215,6 +350,8 @@ function pxToFt(px) {
 }
 
 let wallDrawMode = false;
+
+let doorMode = false;
 
 let scale = 1;
 
@@ -234,13 +371,242 @@ let startPan = {
 
 let wallStartPoint = null;
 
+let rooms = [];
+let roomLabels = [];
+let floors = {};
+
+let currentFloor =
+  "Ground Floor";
+
+let currentProjectId =
+  localStorage.getItem(
+    "currentProjectId"
+  );
+
+let currentProjectName =
+  localStorage.getItem(
+    "currentProjectName"
+  );  
+
+function getUndoStack(){
+
+  if(!floorUndoStacks[currentFloor]){
+
+    floorUndoStacks[currentFloor] = [];
+  }
+
+  return floorUndoStacks[currentFloor];
+}
+
+function getRedoStack(){
+
+  if(!floorRedoStacks[currentFloor]){
+
+    floorRedoStacks[currentFloor] = [];
+  }
+
+  return floorRedoStacks[currentFloor];
+}
+
+let labelMode = false;
+
+function getGraphNodes(){
+
+  const nodes = [];
+
+  function addNode(x, y){
+
+    const existing =
+      nodes.find(n =>
+        Math.hypot(
+          n.x - x,
+          n.y - y
+        ) < 5
+      );
+
+    if(existing)
+      return;
+
+    nodes.push({
+      x,
+      y
+    });
+  }
+
+  vertices.forEach(v => {
+
+    addNode(
+      v.x,
+      v.y
+    );
+
+  });
+
+  interiorWalls.forEach(w => {
+
+    addNode(
+      w.x1,
+      w.y1
+    );
+
+    addNode(
+      w.x2,
+      w.y2
+    );
+  });
+
+  return nodes;
+}
+
+function getGraphEdges(){
+
+  const edges = [];
+
+  /* ROOM OUTER WALLS */
+
+  for(let i = 0; i < vertices.length; i++){
+
+    const a = vertices[i];
+    const b =
+      vertices[
+        (i + 1) % vertices.length
+      ];
+
+    edges.push({
+
+      x1: a.x,
+      y1: a.y,
+
+      x2: b.x,
+      y2: b.y
+    });
+  }
+
+  /* INTERIOR WALLS */
+
+  interiorWalls.forEach(w => {
+
+    edges.push({
+
+      x1: w.x1,
+      y1: w.y1,
+
+      x2: w.x2,
+      y2: w.y2
+    });
+  });
+
+  return edges;
+}
+
+function getGraphAdjacency(){
+
+  const nodes =
+    getGraphNodes();
+
+  const adjacency =
+    new Map();
+
+  nodes.forEach((node,index)=>{
+
+    adjacency.set(
+      index,
+      []
+    );
+  });
+
+  function findNodeIndex(x,y){
+
+    return nodes.findIndex(n =>
+
+      Math.hypot(
+        n.x - x,
+        n.y - y
+      ) < 5
+    );
+  }
+
+  const edges =
+    getGraphEdges();
+
+  edges.forEach(edge => {
+
+    const a =
+      findNodeIndex(
+        edge.x1,
+        edge.y1
+      );
+
+    const b =
+      findNodeIndex(
+        edge.x2,
+        edge.y2
+      );
+
+    if(
+      a === -1 ||
+      b === -1
+    ){
+      return;
+    }
+
+    adjacency
+      .get(a)
+      .push(b);
+
+    adjacency
+      .get(b)
+      .push(a);
+  });
+
+  return {
+    nodes,
+    adjacency
+  };
+}
+
+function drawGraphNodes(){
+
+  const nodes =
+    getGraphNodes();
+
+  nodes.forEach(node => {
+
+    const c =
+      document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "circle"
+      );
+
+    c.setAttribute("cx", node.x);
+    c.setAttribute("cy", node.y);
+
+    c.setAttribute("r", 4);
+
+    c.setAttribute(
+      "fill",
+      "red"
+    );
+
+    svg.appendChild(c);
+  });
+}
+
 let interiorWalls = [];
+
+let doors = [];
 
 let previewWall = null;
 let selectedWall = null;
+let selectedDoor = null;
 
-let undoStack = [];
-let redoStack = [];
+let floorUndoStacks = {
+  "Ground Floor":[]
+};
+
+let floorRedoStacks = {
+  "Ground Floor":[]
+};
 
 /* ================= WALL DRAWING ================= */
 
@@ -255,6 +621,27 @@ document.getElementById("draw-wall-btn").onclick = () => {
   previewWall = null;
 
   canvas.style.cursor = "crosshair";
+};
+
+document
+  .getElementById(
+    "add-door-btn"
+  )
+  .onclick = () => {
+
+    doorMode = true;
+
+    canvas.style.cursor =
+      "crosshair";
+};
+
+document.getElementById(
+  "add-label-btn"
+).onclick = () => {
+
+  labelMode = true;
+
+  canvas.style.cursor = "text";
 };
 
 /* ================= ROOM ================= */
@@ -352,6 +739,56 @@ function screenToWorld(clientX, clientY) {
   };
 }
 
+function getNearestSnapPoint(x, y){
+
+  const SNAP_DIST = 25;
+
+  let best = null;
+  let bestDist = Infinity;
+
+  const points = [];
+
+  vertices.forEach(v => {
+    points.push({
+      x:v.x,
+      y:v.y
+    });
+  });
+
+  interiorWalls.forEach(w => {
+
+    points.push({
+      x:w.x1,
+      y:w.y1
+    });
+
+    points.push({
+      x:w.x2,
+      y:w.y2
+    });
+  });
+
+  for(const p of points){
+
+    const dist =
+      Math.hypot(
+        x - p.x,
+        y - p.y
+      );
+
+    if(
+      dist < SNAP_DIST &&
+      dist < bestDist
+    ){
+
+      bestDist = dist;
+      best = p;
+    }
+  }
+
+  return best;
+}
+
 function getNearestWallPoint(x, y) {
 
   let best = null;
@@ -439,28 +876,49 @@ function getNearestWallPoint(x, y) {
 
   });
 
+  if(bestDist > 40){
+    return null;
+  }
+
   return best;
 }
 
 function saveState() {
 
-    const newState = {
+  const undoStack =
+    getUndoStack();
 
-        vertices:
-            JSON.parse(JSON.stringify(vertices)),
+  const redoStack =
+    getRedoStack();
 
-        interiorWalls:
-            JSON.parse(
-                JSON.stringify(interiorWalls)
-            ),
+  const newState = {
 
-        furniture:
-            JSON.parse(
-                JSON.stringify(
-                    getFurnitureSnapshot()
-                )
-            )
-    };
+      vertices:
+        JSON.parse(JSON.stringify(vertices)),
+
+      interiorWalls:
+        JSON.parse(
+          JSON.stringify(interiorWalls)
+        ),
+
+      doors:
+        JSON.parse(
+          JSON.stringify(doors)
+        ),  
+
+      furniture:
+        JSON.parse(
+          JSON.stringify(
+            getFurnitureSnapshot()
+          )
+        ),
+
+      labels:
+        JSON.parse(
+          JSON.stringify(roomLabels)
+        ), 
+        
+  };
 
   if (undoStack.length > 0) {
 
@@ -484,7 +942,7 @@ function saveState() {
     undoStack.shift();
   }
 
-  redoStack = [];
+  floorRedoStacks[currentFloor] = [];
 }
 
 function getFurnitureSnapshot() {
@@ -500,6 +958,10 @@ function getFurnitureSnapshot() {
 
       wFt: furniture[id].wFt,
       hFt: furniture[id].hFt,
+
+      rotation:
+        furniture[id].rotation || 0,
+
 
       img:
         furniture[id]
@@ -524,6 +986,20 @@ function restoreState(state) {
         JSON.stringify(
             state.interiorWalls || []
         )
+    );
+
+  doors =
+    JSON.parse(
+      JSON.stringify(
+        state.doors || []
+      )
+    );  
+    
+  roomLabels =
+    JSON.parse(
+        JSON.stringify(
+            state.labels || []
+        )
     );  
 
   furnitureLayer.innerHTML = "";
@@ -532,24 +1008,37 @@ function restoreState(state) {
 
   for (const id in state.furniture) {
 
-  const item =
-    state.furniture[id];
+    const item =
+      state.furniture[id];
 
-  const x =
-    parseFloat(item.left);
+    const x =
+      parseFloat(item.left);
 
-  const y =
-    parseFloat(item.top);
+    const y =
+      parseFloat(item.top);
 
-  createFurnitureElement(
-    "",
-    item.img,
-    item.wFt,
-    item.hFt,
-    x + ftToPx(item.wFt)/2,
-    y + ftToPx(item.hFt)/2
-  );
-}
+    createFurnitureElement(
+      "",
+      item.img,
+      item.wFt,
+      item.hFt,
+      x + ftToPx(item.wFt)/2,
+      y + ftToPx(item.hFt)/2
+    );
+
+    const newestId =
+      "f" + (nextId - 1);
+
+    furniture[newestId].rotation =
+      item.rotation || 0;
+
+    furniture[newestId]
+      .el
+      .style
+      .transform =
+        `rotate(${item.rotation || 0}deg)`;
+    
+  }
 
   selected = null;
 
@@ -742,6 +1231,8 @@ path.setAttribute("class", "wall");
 
 svg.appendChild(path);
 
+console.log(path);
+console.log(path.getAttribute("fill"));
 /* ===== INTERIOR WALLS ===== */
 
 interiorWalls.forEach(w => {
@@ -767,6 +1258,110 @@ interiorWalls.forEach(w => {
   line.setAttribute("stroke-width", "4");
 
   svg.appendChild(line);
+});
+
+doors.forEach(d => {
+
+  /* Door Leaf */
+
+  const door =
+    document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "line"
+    );
+
+  door.setAttribute(
+    "x1",
+    d.x1
+  );
+
+  door.setAttribute(
+    "y1",
+    d.y1
+  );
+
+  door.setAttribute(
+    "x2",
+    d.x2
+  );
+
+  door.setAttribute(
+    "y2",
+    d.y2
+  );
+
+  door.setAttribute(
+    "stroke",
+    selectedDoor === d
+      ? "#4a90e2"
+      :"#8B4513"
+  );
+
+  door.setAttribute(
+    "stroke-width",
+    "6"
+  );
+
+  svg.appendChild(door);
+
+  /* Swing Arc */
+
+  const arc =
+    document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "path"
+    );
+
+  let arcPath = "";
+
+  if(
+    d.orientation ===
+    "horizontal"
+  ){
+
+    arcPath =
+
+      `M ${d.x1} ${d.y1}
+       A 50 50 0 0 1
+       ${d.x1+50}
+       ${d.y1-50}`;
+
+  }else{
+
+    arcPath =
+
+      `M ${d.x1} ${d.y1}
+       A 50 50 0 0 1
+       ${d.x1+50}
+       ${d.y1+50}`;
+  }
+
+  arc.setAttribute(
+    "d",
+    arcPath
+  );
+
+  arc.setAttribute(
+    "fill",
+    "none"
+  );
+
+  arc.setAttribute(
+    "stroke",
+    "#999"
+  );
+
+  arc.setAttribute(
+    "stroke-width",
+    "2"
+  );
+
+  arc.setAttribute(
+    "stroke-dasharray",
+    "4 4"
+  );
+
+  svg.appendChild(arc);
 });
 
 /* ===== PREVIEW WALL ===== */
@@ -1196,6 +1791,62 @@ for (let i = 0; i < vertices.length; i++) {
     };
     svg.appendChild(c);
   });
+
+  roomLabels.forEach(label => {
+
+  const t =
+    document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "text"
+    );
+
+    t.setAttribute(
+      "x",
+      label.x
+    );
+
+    t.setAttribute(
+      "y",
+      label.y
+    );
+
+  t.setAttribute(
+    "text-anchor",
+    "middle"
+  );
+
+  t.setAttribute(
+    "dominant-baseline",
+    "middle"
+  );
+
+  t.setAttribute(
+    "font-size",
+    "22"
+  );
+
+  t.setAttribute(
+    "font-weight",
+    "600"
+  );
+
+  t.setAttribute(
+    "fill",
+    "#888"
+  );
+
+  t.setAttribute(
+    "font-family",
+    "Arial, sans-serif"
+  );
+
+  t.textContent =
+    label.text;
+
+  svg.appendChild(t);
+});
+
+  drawGraphNodes();
 }
 
 document.addEventListener("mousemove", e => {
@@ -1209,12 +1860,16 @@ document.addEventListener("mousemove", e => {
     return;
   }
 
-  const r = canvas.getBoundingClientRect();
-
   const grid = 20;
 
-  let nx = e.clientX - r.left;
-  let ny = e.clientY - r.top;
+  const world =
+    screenToWorld(
+      e.clientX,
+      e.clientY
+    );
+
+  let nx = world.x;
+  let ny = world.y;
 
   //grid snapping//
   nx = Math.round(nx / grid) * grid;
@@ -1307,7 +1962,7 @@ viewport.addEventListener("mousedown", e => {
   lastClickTime = now;
 
   /* SPACEBAR OR MIDDLE MOUSE */
-  if (e.button === 1 || spacePressed) {
+  if (e.button === 1) {
 
     isPanning = true;
 
@@ -1371,6 +2026,217 @@ viewport.addEventListener("wheel", e => {
 
 svg.addEventListener("click", e => {
 
+  if(doorMode){
+
+    const world =
+      screenToWorld(
+        e.clientX,
+        e.clientY
+      );
+
+    const wall =
+      getNearestWallPoint(
+        world.x,
+        world.y
+      );
+
+    if(!wall)
+      return;
+
+    let nearestWall = null;
+    let bestDist = Infinity;
+
+    /* OUTER ROOM WALLS */
+
+    for(let i=0;i<vertices.length;i++){
+
+      const a = vertices[i];
+
+      const b =
+        vertices[
+          (i+1)%vertices.length
+        ];
+
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+
+      const lenSq =
+        dx*dx + dy*dy;
+
+      if(lenSq===0)
+        continue;
+
+      let t =
+        (
+          (world.x-a.x)*dx +
+          (world.y-a.y)*dy
+        )/lenSq;
+
+      t = Math.max(
+        0,
+        Math.min(1,t)
+      );
+
+      const px =
+        a.x + t*dx;
+
+      const py =
+        a.y + t*dy;
+
+      const dist =
+        Math.hypot(
+          world.x-px,
+          world.y-py
+        );
+
+      if(dist < bestDist){
+
+        bestDist = dist;
+
+        nearestWall = {
+
+          x1:a.x,
+          y1:a.y,
+
+          x2:b.x,
+          y2:b.y
+        };
+      }
+    }
+
+    /* INTERIOR WALLS */
+
+    for(const w of interiorWalls){
+
+      const dx = w.x2 - w.x1;
+      const dy = w.y2 - w.y1;
+
+      const lenSq =
+        dx * dx + dy * dy;
+
+      if(lenSq === 0)
+        continue;
+
+      let t =
+        ((world.x - w.x1) * dx +
+          (world.y - w.y1) * dy)
+        / lenSq;
+
+      t = Math.max(
+        0,
+        Math.min(1,t)
+      );
+
+      const px =
+        w.x1 + t * dx;
+
+      const py =
+        w.y1 + t * dy;
+
+      const dist =
+        Math.hypot(
+          world.x - px,
+          world.y - py
+        );
+
+      if(dist < bestDist){
+
+        bestDist = dist;
+
+        nearestWall = w;
+      }
+    }
+
+    if(!nearestWall)
+      return;
+
+    const dx =
+      nearestWall.x2 -
+      nearestWall.x1;
+
+    const dy =
+      nearestWall.y2 -
+      nearestWall.y1;
+
+    if(
+      Math.abs(dx) >
+      Math.abs(dy)
+    ){
+
+      // Horizontal wall
+
+      doors.push({
+
+        x1: wall.x - 25,
+        y1: wall.y,
+
+        x2: wall.x + 25,
+        y2: wall.y,
+
+        orientation:
+          "horizontal"
+      });
+
+    }else{
+
+      // Vertical wall
+
+      doors.push({
+
+        x1: wall.x,
+        y1: wall.y - 25,
+
+        x2: wall.x,
+        y2: wall.y + 25,
+
+        orientation:
+          "vertical"
+      });
+    }  
+
+    doorMode = false;
+
+    saveState();
+
+    drawRoom();
+
+    return;
+  }
+
+  if(labelMode){
+
+    const world =
+      screenToWorld(
+        e.clientX,
+        e.clientY
+      );
+
+    const text =
+      prompt(
+        "Room Name:"
+      );
+
+    if(text){
+
+      roomLabels.push({
+
+        x: world.x,
+        y: world.y,
+
+        text
+      });
+      saveState();
+      drawRoom();
+    }
+
+    labelMode = false;
+
+    canvas.style.cursor =
+      "default";
+
+    return;
+  }
+
   if (!wallDrawMode) return;
 
     const now = Date.now();
@@ -1415,38 +2281,40 @@ svg.addEventListener("click", e => {
 
     if (drawWallStage === 0) {
 
-        const snap =
+        let snap =
+          getNearestSnapPoint(
+            x,
+            y
+          );
+
+        if(!snap){
+
+          snap =
             getNearestWallPoint(
-                x,
-                y
+              x,
+              y
             );
+        }
 
-    if (!snap) return;
+      if (snap && Math.hypot(x - snap.x, y - snap.y) < 40) {
 
-    const maxDistance = 40;
+      drawWallStart = {
 
-    if (
-        Math.hypot(
-            x - snap.x,
-            y - snap.y
-        ) > maxDistance
-    ) {
-        return;
+        x: snap.x,
+        y: snap.y
+      };
+      } else {
+
+        drawWallStart = {
+          x: x,
+          y: y
+        };
+      }
+
+      drawWallStage = 1;
+
+      return;
     }
-
-    drawWallStart = {
-
-        x:
-            Math.round(snap.x / 20) * 20,
-
-        y:
-            Math.round(snap.y / 20) * 20
-    };
-
-    drawWallStage = 1;
-
-    return;
-}
 
   /* SECOND CLICK */
 
@@ -1455,11 +2323,20 @@ svg.addEventListener("click", e => {
 
     /* SNAP ENDPOINT TO WALLS */
 
-    const endSnap =
+    let endSnap =
+      getNearestSnapPoint(
+        x,
+        y
+      );
+
+    if(!endSnap){
+
+      endSnap =
         getNearestWallPoint(
-            x,
-            y
+          x,
+          y
         );
+    }
 
     if (
         endSnap &&
@@ -1469,12 +2346,19 @@ svg.addEventListener("click", e => {
         ) < 40
     ) {
 
-        endX =
-            Math.round(endSnap.x / 20) * 20;
+        endX = endSnap.x;
+        endY = endSnap.y;
+      }
+    
+    splitWallAtPoint(
+      drawWallStart.x,
+      drawWallStart.y
+    );
 
-        endY =
-            Math.round(endSnap.y / 20) * 20;
-    }
+    splitWallAtPoint(
+      endX,
+      endY
+    );
 
     interiorWalls.push({
 
@@ -1510,7 +2394,56 @@ svg.addEventListener("mousedown", e => {
 
   selectedWall = null;
 
-  for (const w of interiorWalls) {
+  selectedDoor = null;
+
+  /* ================= DOORS FIRST ================= */
+
+  for(const d of doors){
+
+    const dx = d.x2 - d.x1;
+    const dy = d.y2 - d.y1;
+
+    const lenSq = dx*dx + dy*dy;
+
+      if(lenSq === 0)
+        continue;
+
+    let t =
+      (
+        (world.x - d.x1) * dx +
+        (world.y - d.y1) * dy
+      ) / lenSq;
+
+    t = Math.max(
+      0,
+      Math.min(1,t)
+    );
+
+    const px =
+      d.x1 + t * dx;
+
+    const py =
+      d.y1 + t * dy;
+
+    const dist =
+      Math.hypot(
+        world.x - px,
+        world.y - py
+      );
+
+    if(dist < 12){
+
+      selectedDoor = d;
+
+      drawRoom();
+
+      return;
+    }
+  }
+
+  /* ================= WALLS SECOND ================= */
+
+  for(const w of interiorWalls){
 
     const dx = w.x2 - w.x1;
     const dy = w.y2 - w.y1;
@@ -1518,17 +2451,18 @@ svg.addEventListener("mousedown", e => {
     const lenSq =
       dx * dx + dy * dy;
 
-    if (lenSq === 0)
+    if(lenSq === 0)
       continue;
 
     let t =
-      ((world.x - w.x1) * dx +
-       (world.y - w.y1) * dy)
-      / lenSq;
+      (
+        (world.x - w.x1) * dx +
+        (world.y - w.y1) * dy
+      ) / lenSq;
 
     t = Math.max(
       0,
-      Math.min(1, t)
+      Math.min(1,t)
     );
 
     const px =
@@ -1543,7 +2477,7 @@ svg.addEventListener("mousedown", e => {
         world.y - py
       );
 
-    if (dist < 10) {
+    if(dist < 10){
 
       selectedWall = w;
 
@@ -1669,6 +2603,180 @@ function overlap(id,x,y,w,h){
   return false;
 }
 
+function lineSegmentsIntersect(
+  x1,y1,x2,y2,
+  x3,y3,x4,y4
+){
+
+  const den =
+    (x1-x2)*(y3-y4) -
+    (y1-y2)*(x3-x4);
+
+  if(Math.abs(den) < 0.0001)
+    return false;
+
+  const t =
+    (
+      (x1-x3)*(y3-y4) -
+      (y1-y3)*(x3-x4)
+    ) / den;
+
+  const u =
+    -(
+      (x1-x2)*(y1-y3) -
+      (y1-y2)*(x1-x3)
+    ) / den;
+
+  return (
+    t >= 0 &&
+    t <= 1 &&
+    u >= 0 &&
+    u <= 1
+  );
+}
+
+function pointOnSegment(
+  px, py,
+  x1, y1,
+  x2, y2
+){
+
+  const tolerance = 5;
+
+  const d1 =
+    Math.hypot(
+      px - x1,
+      py - y1
+    );
+
+  const d2 =
+    Math.hypot(
+      px - x2,
+      py - y2
+    );
+
+  const lineLen =
+    Math.hypot(
+      x2 - x1,
+      y2 - y1
+    );
+
+  return Math.abs(
+    d1 + d2 - lineLen
+  ) < tolerance;
+}
+
+function splitWallAtPoint(px, py){
+
+  for(let i = 0; i < interiorWalls.length; i++){
+
+    const w = interiorWalls[i];
+
+    if(
+      pointOnSegment(
+        px, py,
+        w.x1, w.y1,
+        w.x2, w.y2
+      )
+    ){
+
+      const isEndpoint =
+        (
+          Math.hypot(
+            px - w.x1,
+            py - w.y1
+          ) < 5
+        ) ||
+        (
+          Math.hypot(
+            px - w.x2,
+            py - w.y2
+          ) < 5
+        );
+
+      if(isEndpoint)
+        return;
+
+      interiorWalls.splice(i,1);
+
+      interiorWalls.push({
+        x1: w.x1,
+        y1: w.y1,
+        x2: px,
+        y2: py
+      });
+
+      interiorWalls.push({
+        x1: px,
+        y1: py,
+        x2: w.x2,
+        y2: w.y2
+      });
+
+      return;
+    }
+  }
+}
+
+function collidesWithWall(
+  x,
+  y,
+  w,
+  h
+){
+
+  const inset =
+    Math.min(w,h) * 0.20;
+
+  const left =
+    x + inset;
+
+  const right =
+    x + w - inset;
+
+  const top =
+    y + inset;
+
+  const bottom =
+    y + h - inset;
+
+  const edges = [
+
+    [left,top,right,top],
+
+    [right,top,right,bottom],
+
+    [right,bottom,left,bottom],
+
+    [left,bottom,left,top]
+  ];
+
+  for(const wall of interiorWalls){
+
+    for(const edge of edges){
+
+      if(
+        lineSegmentsIntersect(
+
+          edge[0],
+          edge[1],
+          edge[2],
+          edge[3],
+
+          wall.x1,
+          wall.y1,
+          wall.x2,
+          wall.y2
+        )
+      ){
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function createFurnitureElement(name,img,wFt,hFt,x,y){
 
   const id = "f" + nextId++;
@@ -1686,7 +2794,7 @@ function createFurnitureElement(name,img,wFt,hFt,x,y){
   el.style.left = x - wPx/2 + "px";
   el.style.top = y - hPx/2 + "px";
 
-  furniture[id] = { el, wFt, hFt };
+  furniture[id] = { el, wFt, hFt, rotation: 0 };
 
   el.innerHTML = `
     <img src="${img}">
@@ -1731,6 +2839,9 @@ function createFurnitureElement(name,img,wFt,hFt,x,y){
     rw.value = furniture[id].wFt;
     rh.value = furniture[id].hFt;
 
+    console.log("Furniture selected");
+    console.log(resizePanel);
+
     resizePanel.style.display = "block";
 
     const world =
@@ -1748,7 +2859,7 @@ function createFurnitureElement(name,img,wFt,hFt,x,y){
 
   furnitureLayer.appendChild(el);
 
-  furniture[id] = { el, wFt, hFt };
+  furniture[id] = { el, wFt, hFt, rotation:0 };
 }
 
 function createFurniture(
@@ -1785,8 +2896,19 @@ document.addEventListener("mousemove", e => {
   const hPx = ftToPx(it.hFt);
 
   if(
-    rectInsidePolygon(nx,ny,wPx,hPx,vertices) &&
-    !overlap(draggingFurniture,nx,ny,wPx,hPx)
+    !overlap(
+      draggingFurniture,
+      nx,
+      ny,
+      wPx,
+      hPx
+    ) &&
+    !collidesWithWall(
+      nx,
+      ny,
+      wPx,
+      hPx
+    )
   ){
     it.el.style.left = nx + "px";
     it.el.style.top = ny + "px";
@@ -1813,8 +2935,19 @@ rw.onchange = rh.onchange = () => {
   const hPx = ftToPx(hFt);
 
   if(
-    rectInsidePolygon(x,y,wPx,hPx,vertices) &&
-    !overlap(selected,x,y,wPx,hPx)
+    !overlap(
+      selected,
+      x,
+      y,
+      wPx,
+      hPx
+    ) &&
+    !collidesWithWall(
+      x,
+      y,
+      wPx,
+      hPx
+    )
   ){
 
     it.wFt = wFt;
@@ -1849,7 +2982,45 @@ canvas.ondragover = e => e.preventDefault();
 canvas.ondrop = e => {
 
   const world =
-    screenToWorld(e.clientX, e.clientY);
+    screenToWorld(
+      e.clientX,
+      e.clientY
+    );
+
+  const wPx =
+    ftToPx(dragData.w);
+
+  const hPx =
+    ftToPx(dragData.h);
+
+  const left =
+    world.x - wPx / 2;
+
+  const top =
+    world.y - hPx / 2;
+
+  if(
+    overlap(
+      "",
+      left,
+      top,
+      wPx,
+      hPx
+    )
+  ){
+    return;
+  }
+
+  if(
+    collidesWithWall(
+      left,
+      top,
+      wPx,
+      hPx
+    )
+  ){
+    return;
+  }
 
   createFurniture(
     dragData.n,
@@ -1859,12 +3030,29 @@ canvas.ondrop = e => {
     world.x,
     world.y
   );
+
   saveState();
 };
 
 window.addEventListener("load", () => {
 
-    initRoom();
+  initRoom();
+    
+  floors["Ground Floor"] = {
+
+    vertices: 
+      JSON.parse(
+
+        JSON.stringify(vertices)
+
+      ),
+
+    interiorWalls: [],
+
+    roomLabels: [],
+
+    furniture: {},
+  };
 
     drawRoom();
 
@@ -1873,17 +3061,29 @@ window.addEventListener("load", () => {
     const viewportRect =
         viewport.getBoundingClientRect();
 
-    const canvasRect =
-        canvas.getBoundingClientRect();
+    const canvasLeft =
+      parseFloat(
+        getComputedStyle(canvas).left
+      );
 
-    /* CENTER CANVAS INSIDE VIEWPORT */
+    const canvasTop =
+      parseFloat(
+        getComputedStyle(canvas).top
+      );
+
+    const canvasWidth =
+      canvas.offsetWidth;
+
+    const canvasHeight =
+      canvas.offsetHeight;
+
     panX =
-        viewportRect.width / 2
-        - 2400;
+      viewportRect.width / 2
+      - (canvasLeft + canvasWidth / 2);
 
     panY =
-        viewportRect.height / 2
-        - 2250;
+      viewportRect.height / 2
+      - (canvasTop + canvasHeight / 2);
 
     updateWorkspaceTransform();
 });
@@ -1893,6 +3093,12 @@ window.addEventListener("resize", initRoom);
 document
   .getElementById("undo-btn")
   .onclick = () => {
+
+  const undoStack =
+    getUndoStack();
+
+  const redoStack =
+    getRedoStack();
 
   if (undoStack.length <= 1)
     return;
@@ -1912,6 +3118,12 @@ document
 document
   .getElementById("redo-btn")
   .onclick = () => {
+
+  const undoStack =
+    getUndoStack();
+
+  const redoStack =
+    getRedoStack();
 
   if (redoStack.length === 0)
     return;
@@ -1968,6 +3180,31 @@ document.addEventListener("keydown", e => {
             drawRoom();
         }
     }
+
+    if(
+      e.key === "Delete" &&
+      selectedDoor
+    ){
+
+      const idx =
+        doors.indexOf(
+          selectedDoor
+        );
+
+      if(idx !== -1){
+
+        doors.splice(
+          idx,
+          1
+        );
+
+        selectedDoor = null;
+
+        saveState();
+
+        drawRoom();
+      }
+    }
 });
 
 const sizeInfo = document.getElementById("size-info");
@@ -1999,6 +3236,31 @@ moveBtn.onclick = () => {
     resizePanel.style.display = "none";
   };
 
+  document
+    .getElementById(
+      "rotate-furniture-btn"
+    )
+    .onclick = () => {
+
+      if(!selected){
+        alert(
+          "Select furniture first"
+        );
+        return;
+      }
+
+      const item =
+        furniture[selected];
+
+      item.rotation =
+        (item.rotation + 90) % 360;
+
+      item.el.style.transform =
+        `rotate(${item.rotation}deg)`;
+
+      saveState();
+    };
+
 /* ================= SIDEBAR PANELS ================= */
 
 const sidebarItems =
@@ -2013,8 +3275,28 @@ const furnishPanel =
 const editPanel =
   document.getElementById("edit-panel");
 
+const buildPanel =
+  document.getElementById("build-panel");
+
 /* DEFAULT */
 furnishPanel.classList.add("active");
+
+document.getElementById("build-tab")
+.onclick = () => {
+
+  sidebarItems.forEach(i =>
+    i.classList.remove("active"));
+
+  document.getElementById("build-tab")
+    .classList.add("active");
+
+  buildPanel.classList.add("active");
+
+  furnishPanel.classList.remove("active");
+  editPanel.classList.remove("active");
+
+  toolPanel.style.transform = "translateX(0)";
+};
 
 document.getElementById("furnish-tab")
 .onclick = () => {
@@ -2026,7 +3308,7 @@ document.getElementById("furnish-tab")
     .classList.add("active");
 
   furnishPanel.classList.add("active");
-
+  buildPanel.classList.remove("active");
   editPanel.classList.remove("active");
 
   toolPanel.style.transform = "translateX(0)";
@@ -2044,9 +3326,639 @@ document.getElementById("edit-tab")
   editPanel.classList.add("active");
 
   furnishPanel.classList.remove("active");
+  buildPanel.classList.remove("active");
 
   toolPanel.style.transform = "translateX(0)";
 };
+
+document
+  .getElementById(
+    "logout-btn"
+  )
+  .onclick =
+async ()=>{
+
+  await signOut(auth);
+
+  window.location.href =
+    "login.html";
+};
+
+async function saveProject(){
+
+  const user =
+    auth.currentUser;
+
+  if(!user){
+    alert("Not logged in");
+    return;
+  }
+
+  const projectName =
+    currentProjectName;
+
+  if(!projectName){
+    alert("No Project Selected");
+    return;
+  }
+
+  saveCurrentFloor();
+
+  const data = {
+  
+    uid:
+      user.uid,
+
+    projectName,
+
+    floors:
+      JSON.parse(
+        JSON.stringify(floors)
+      ),
+
+    currentFloor,
+
+    createdAt:
+      serverTimestamp()
+  };
+
+  if(currentProjectId){
+
+    await updateDoc(
+
+      doc(
+        db,
+        "projects",
+        currentProjectId
+      ),
+
+      data
+    );
+
+  }else{
+
+    const ref =
+      await addDoc(
+
+        collection(
+          db,
+          "projects"
+        ),
+
+        data
+      );
+
+    currentProjectId =
+      ref.id;
+
+    localStorage.setItem(
+      "currentProjectId",
+      ref.id
+    );
+  }
+
+  Object.keys(floorUndoStacks)
+    .forEach(f => {
+
+      floorUndoStacks[f] = [];
+      floorRedoStacks[f] = [];
+    });
+
+  saveCurrentFloor();
+
+  Object.keys(floors)
+    .forEach(f => {
+
+      floorUndoStacks[f].push({
+
+        vertices:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].vertices
+            )
+          ),
+
+        interiorWalls:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].interiorWalls
+            )
+          ),
+
+        doors:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].doors || []
+            )
+          ),
+
+        furniture:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].furniture || {}
+            )
+          ),
+
+        labels:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].roomLabels
+            )
+          )
+
+      });
+    });
+
+  alert(
+    "Project Saved"
+  );
+}
+
+async function loadProjects(){
+
+  const user = auth.currentUser;
+
+  if(!user){
+    alert("Not logged in");
+    return;
+  }
+
+  const q = query(
+    collection(db,"projects"),
+    where("uid","==",user.uid)
+  );
+
+  const snap = await getDocs(q);
+
+  if(snap.empty){
+    alert("No projects found");
+    return;
+  }
+
+  let message = "Projects:\n\n";
+
+  const projects = [];
+
+  let index = 1;
+
+  snap.forEach(docSnap=>{
+
+    const data = docSnap.data();
+
+    projects.push({
+      id: docSnap.id,
+      data
+    });
+
+    message +=
+      index +
+      ". " +
+      data.projectName +
+      "\n";
+
+    index++;
+  });
+
+  const choice =
+    parseInt(
+      prompt(
+        message +
+        "\nEnter project number:"
+      )
+    );
+
+  if(
+    isNaN(choice) ||
+    choice < 1 ||
+    choice > projects.length
+  ){
+    return;
+  }
+
+  const selected =
+    projects[choice - 1];
+
+  const projectData =
+    selected.data;
+
+  currentProjectId =
+    selected.id;
+
+  currentProjectName =
+    projectData.projectName;
+
+  localStorage.setItem(
+    "currentProjectId",
+    currentProjectId
+  );
+
+  localStorage.setItem(
+    "currentProjectName",
+    currentProjectName
+  );
+
+  floors =
+    JSON.parse(
+      JSON.stringify(
+        projectData.floors || {}
+      )
+    );
+
+  currentFloor =
+    projectData.currentFloor
+    || "Ground Floor";
+
+  loadFloor(
+    currentFloor
+  );
+
+  Object.keys(floorUndoStacks)
+    .forEach(f => {
+
+      floorUndoStacks[f] = [];
+      floorRedoStacks[f] = [];
+    });
+
+  Object.keys(floors)
+    .forEach(f => {
+
+      floorUndoStacks[f] = [];
+
+      floorUndoStacks[f].push({
+
+        vertices:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].vertices
+            )
+          ),
+
+        interiorWalls:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].interiorWalls
+            )
+          ),
+
+        doors:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].doors || []
+            )
+          ),  
+
+        furniture:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].furniture || {}
+            )
+          ),
+
+        labels:
+          JSON.parse(
+            JSON.stringify(
+              floors[f].roomLabels
+            )
+          )
+      });
+    });
+
+  document
+    .getElementById(
+      "floor-selector"
+    )
+    .textContent =
+    currentFloor + " ▼";
+
+  alert("Project Loaded");
+}
+
+async function deleteProject(){
+
+  const user = auth.currentUser;
+
+  if(!user){
+    alert("Not logged in");
+    return;
+  }
+
+  const q = query(
+    collection(db,"projects"),
+    where("uid","==",user.uid)
+  );
+
+  const snap = await getDocs(q);
+
+  if(snap.empty){
+    alert("No projects found");
+    return;
+  }
+
+  let message = "Projects:\n\n";
+
+  const projects = [];
+
+  let index = 1;
+
+  snap.forEach(docSnap=>{
+
+    const data = docSnap.data();
+
+    projects.push({
+      id: docSnap.id,
+      data
+    });
+
+    message +=
+      index +
+      ". " +
+      data.projectName +
+      "\n";
+
+    index++;
+  });
+
+  const choice =
+    parseInt(
+      prompt(
+        message +
+        "\n\nEnter project number to DELETE:"
+      )
+    );
+
+  if(
+    isNaN(choice) ||
+    choice < 1 ||
+    choice > projects.length
+  ){
+    return;
+  }
+
+  const selected =
+    projects[choice - 1];
+
+  const confirmDelete =
+    confirm(
+      `Delete "${selected.data.projectName}" ?`
+    );
+
+  if(!confirmDelete)
+    return;
+
+  await deleteDoc(
+    doc(
+      db,
+      "projects",
+      selected.id
+    )
+  );
+
+  alert("Project Deleted");
+}
+
+function restoreFurniture(items){
+
+  document
+    .querySelectorAll(".furniture")
+    .forEach(el => el.remove());
+
+  furniture = {};
+  nextId = 1;
+
+  Object.values(items).forEach(item => {
+
+    createFurniture(
+      "Loaded Furniture",
+      item.img,
+      item.wFt,
+      item.hFt,
+      parseFloat(item.left) +
+        ftToPx(item.wFt)/2,
+      parseFloat(item.top) +
+        ftToPx(item.hFt)/2
+    );
+
+    const newestId =
+      "f" + (nextId - 1);
+
+    furniture[newestId]
+      .rotation =
+        item.rotation || 0;
+
+    furniture[newestId]
+      .el.style.transform =
+        `rotate(${item.rotation || 0}deg)`;
+
+  });
+
+}
+
+document
+  .getElementById(
+    "save-project-btn"
+  )
+  .onclick =
+  saveProject;
+
+document
+  .getElementById(
+    "my-projects-btn"
+  )
+  .onclick =
+  loadProjects; 
+
+document
+  .getElementById(
+    "delete-project-btn"
+  )
+  .onclick =
+  deleteProject;    
+  
+document
+  .getElementById(
+    "add-floor-btn"
+  )
+  .onclick = () => {
+
+    const floorName =
+      prompt(
+        "Floor Name:"
+      );
+
+    if(
+      !floorName ||
+      floors[floorName]
+    ){
+      return;
+    }
+
+    saveCurrentFloor();
+
+    floors[floorName] = {
+
+      vertices: [],
+      interiorWalls: [],
+      roomLabels: [],
+      furniture: {}
+    };
+
+    floorUndoStacks[floorName] = [];
+    floorRedoStacks[floorName] = [];
+
+    currentFloor =
+      floorName;
+
+    vertices = [];
+    interiorWalls = [];
+    roomLabels = [];
+    doors = [];
+
+    furnitureLayer.innerHTML = "";
+    furniture = {};
+
+    initRoom();
+
+    drawRoom();
+
+    saveState();
+
+    document
+      .getElementById(
+        "floor-selector"
+      )
+      .textContent =
+      floorName + " ▼";
+};  
+
+document
+  .getElementById(
+    "floor-selector"
+  )
+  .onclick = () => {
+
+    const names =
+      Object.keys(
+        floors
+      );
+
+    const choice =
+      prompt(
+        "Available Floors:\n\n" +
+        names.join("\n")
+      );
+
+    if(
+      choice &&
+      floors[choice]
+    ){
+      switchFloor(
+        choice
+      );
+    }
+};
+
+function saveCurrentFloor(){
+
+  floors[currentFloor] = {
+
+    vertices:
+      JSON.parse(
+        JSON.stringify(vertices)
+      ),
+
+    interiorWalls:
+      JSON.parse(
+        JSON.stringify(interiorWalls)
+      ),
+
+    doors:
+      JSON.parse(
+        JSON.stringify(doors)
+      ),  
+
+    roomLabels:
+      JSON.parse(
+        JSON.stringify(roomLabels)
+      ),
+
+    furniture:
+      JSON.parse(
+        JSON.stringify(
+          getFurnitureSnapshot()
+        )
+      ),
+  };
+}
+
+function loadFloor(name){
+
+  const floor =
+    floors[name];
+
+  if(!floor)
+    return;
+
+  vertices =
+    JSON.parse(
+      JSON.stringify(
+        floor.vertices
+      )
+    );
+
+  interiorWalls =
+    JSON.parse(
+      JSON.stringify(
+        floor.interiorWalls
+      )
+    );
+
+  doors =
+    JSON.parse(
+      JSON.stringify(
+        floor.doors || []
+      )
+    );  
+
+  roomLabels =
+    JSON.parse(
+      JSON.stringify(
+        floor.roomLabels
+      )
+    );
+
+  restoreFurniture(
+    floor.furniture || {}
+  );
+
+  drawRoom();
+}
+
+function switchFloor(
+  floorName
+){
+
+  saveCurrentFloor();
+
+  currentFloor =
+    floorName;
+
+  loadFloor(
+    floorName
+  );
+
+  if(
+    getUndoStack().length === 0
+  ){
+      saveState();
+    }
+
+  document
+    .getElementById(
+      "floor-selector"
+    )
+    .textContent =
+    floorName + " ▼";
+}
 
 function updateSizeInfo(w,h){
 

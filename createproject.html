@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Project - Roomify</title>
+
+    <link rel="stylesheet" href="home.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <style>
+        .project-box{
+            background: rgba(255,255,255,0.7);
+            width: 500px;
+            min-height: 220px;
+            border-radius: 15px;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+            align-items:center;
+
+            gap:20px;
+            padding:30px;
+        }
+
+        .project-box h2{
+            color:#2f4f5f;
+        }
+
+        .project-box input{
+
+            width:90%;
+            height:45px;
+
+            border:none;
+            border-radius:10px;
+
+            padding:0 15px;
+
+            font-size:16px;
+        }
+
+        .create-project-btn{
+
+            padding:12px 30px;
+
+            border:none;
+            border-radius:10px;
+
+            background:#2f4f5f;
+            color:white;
+
+            cursor:pointer;
+
+            font-size:16px;
+            font-weight:bold;
+        }
+
+        .create-project-btn:hover{
+            opacity:.9;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <header>
+        <h1 class="logo"><b>Roomify</b></h1>
+
+        <nav>
+            <a href="home.html">Home</a>
+            <a href="#">Contact us</a>
+            <a href="#">About us</a>
+        </nav>
+    </header>
+
+    <div class="section-row">
+
+        <div class="project-box">
+
+            <h2>Create New Project</h2>
+
+            <input
+                type="text"
+                id="project-name"
+                placeholder="Enter Project Name">
+
+            <button
+                class="create-project-btn"
+                id="create-project-btn">
+
+                Create Project
+
+            </button>
+
+        </div>
+
+    </div>
+
+    <footer class="glass-footer">
+        <p>&copy; 2025 Roomify. All Rights Reserved.</p>
+    </footer>
+
+</div>
+
+<script type="module">
+
+document
+  .getElementById(
+    "create-project-btn"
+  )
+  .addEventListener(
+    "click",
+    ()=>{
+
+      const name =
+        document
+          .getElementById(
+            "project-name"
+          )
+          .value
+          .trim();
+
+      if(!name){
+
+        alert(
+          "Please enter a project name."
+        );
+
+        return;
+      }
+
+      localStorage.setItem(
+        "currentProjectName",
+        name
+      );
+
+      localStorage.removeItem(
+        "currentProjectId"
+      );
+
+      location.href =
+        "room1_drawWall.html";
+    }
+  );
+
+</script>
+
+</body>
+</html>
